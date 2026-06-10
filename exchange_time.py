@@ -71,6 +71,12 @@ def is_at_or_after(dt: datetime.datetime, cutoff: datetime.time) -> bool:
     return exchange_local_time(dt) >= cutoff
 
 
+def is_opening_session_window(dt: datetime.datetime) -> bool:
+    """08:45 <= t < 09:15（期貨 + 現貨開盤衝擊窗）；P2-5 IOC 取消統計用。"""
+    t = exchange_local_time(dt)
+    return _OPEN_FUTURES <= t < _OPEN_NORMAL
+
+
 def compute_vol_threshold(
     current_atr: float,
     dt: datetime.datetime,

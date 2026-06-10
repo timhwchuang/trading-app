@@ -14,13 +14,22 @@ cd C:\path\to\theman
 .\.venv\Scripts\activate
 $env:SJ_API_KEY = "your_api_key"
 $env:SJ_SEC_KEY = "your_secret_key"
-$env:LOG_FILE = "C:\logs\theman-uat.log"   # 建議開啟，方便事後對帳
+$env:LOG_FILE = "C:\logs\theman-uat.log"   # 建議開啟（P4-2 每日輪替）
+# UAT 第一天：驗證委託回報欄位
+$env:DUMP_ORDER_EVENTS = "1"
 python man.py
 ```
 
 - [ ] `config.yaml` 中 `simulation: true`
 - [ ] 系統時區為台北 (UTC+8)
 - [ ] log 出現 `VWAP Momentum 策略已啟動` 與 `ATR(...) 更新`
+- [ ] log 出現 `API usage [login]`（P4-9 流量基線）
+
+### UAT 第一天（必做）
+
+1. `DUMP_ORDER_EVENTS=1` 跑一筆委託/成交 → 搜尋 `RAW_ORDER_EVT` 確認欄位名（P0-9）
+2. 確認啟動無 `無期貨帳號` 錯誤（P0-10）
+3. 收盤後：`python uat_report.py C:\logs\theman-uat.log`（P2-7）
 
 ---
 
@@ -123,8 +132,22 @@ signal 產生後、下單前已在 lock 內設 `is_pending`，開盤高頻 tick 
 
 進場 IOC Cancelled 是保護機制，不是 bug。
 
-- Log：`委託未成交/已取消，重置 pending | tag=intent_cancelled`
+- Log：`tag=intent_cancelled` 或 `tag=intent_cancelled_open_session`（08:45–09:15）
 - **禁止**為提高成交率放大開盤 IOC 讓價
+
+### P1-6 進場保護期停損
+
+保護期內（60 tick 且 30 秒）僅硬停損 ±6；之後才啟用 VWAP 停損（audit `stop_loss_vwap`）。
+
+- 驗收：進場後小幅震盪不應秒觸 `stop_loss_vwap`；`uat_report` 秒停損率應下降
+
+### P4-8 No-tick 看門狗（觀測）
+
+長時間無 tick：`No-tick 看門狗 | ... 嘗試重訂閱`
+
+### P1-3 tick_type 分布（觀測）
+
+每 30 分鐘：`tick_type 分布 | type0=... type1=...`
 
 ---
 

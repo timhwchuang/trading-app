@@ -21,8 +21,11 @@ simulation: true
 product_code: TXFR1
 
 strategy:
-  # VWAP 滾動視窗長度（分鐘）；用於計算當前 VWAP 與出場 VWAP 停損
+  # VWAP 滾動視窗長度（分鐘）；5 分鐘滾動 VWMA（非日內錨定 VWAP）
   vwap_window_min: 5
+
+  # 動量觸發後 pullback 進場帶寬（點數）；價格與 VWMA 距離 ≤ 此值視為 near_vwap
+  entry_band_points: 2.0
 
   # 1 秒內總成交量門檻；觸發動量突破偵測（P1-2 完成後改由 vol_threshold 動態計算）
   momentum_vol_1s: 150
@@ -51,7 +54,7 @@ strategy:
   # Trailing Stop 回落點數（多單從高點回落 N 點出場，空單從低點反彈 N 點出場）
   trail_points: 8
 
-  # ATR 計算週期（K 線根數）
+  # ATR 計算週期（1 分 K 根數；20 = 最近 20 分鐘 TR 平均）
   atr_period: 20
 
   # 波動濾鏡：ATR 低於此值不交易（過濾平淡市況）
@@ -68,6 +71,22 @@ strategy:
 
   # IOC 限價讓價點數（買 = ref + N，賣 = ref - N）；全日固定，開盤不放大
   ioc_slippage_points: 3
+
+  # 進場後亂流保護：未滿足 tick 數且未滿秒數前，僅硬停損、不啟用 VWAP 停損
+  exit_grace_ticks: 60
+  exit_grace_sec: 30
+
+  # 硬停損點數（entry ± N）；保護期內唯一停損
+  hard_stop_points: 6
+
+  # VWAP 追蹤停損點數（保護期結束後與硬停損並存，取較緊者）
+  vwap_stop_points: 3
+
+  # 交易時段內無 tick 超過此秒數 → 看門狗告警並嘗試重訂閱（P4-8）
+  no_tick_timeout_sec: 45
+
+  # |系統時間 − 交易所時間| 超過此秒數 → WARNING（P4-6，每 5 分鐘最多一筆）
+  clock_skew_warn_sec: 1.0
 
 session:
   # 日盤允許交易起始時間（台指期期貨開盤，exchange time）

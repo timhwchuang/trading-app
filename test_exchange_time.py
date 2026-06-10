@@ -6,7 +6,13 @@ import datetime
 import unittest
 
 from config import SESSION_END, SESSION_START
-from exchange_time import TAIWAN_TZ, exchange_date, is_trading_session
+from exchange_time import (
+    TAIWAN_TZ,
+    exchange_date,
+    is_opening_session_window,
+    is_trading_session,
+)
+from test_helpers import make_strategy
 
 
 def _dt(hour: int, minute: int, second: int = 0) -> datetime.datetime:
@@ -40,11 +46,17 @@ class TestExchangeDate(unittest.TestCase):
         self.assertEqual(exchange_date(utc), datetime.date(2026, 6, 10))
 
 
+class TestOpeningSessionWindow(unittest.TestCase):
+    def test_opening_window_boundaries(self):
+        self.assertTrue(is_opening_session_window(_dt(8, 45, 0)))
+        self.assertTrue(is_opening_session_window(_dt(9, 14, 59)))
+        self.assertFalse(is_opening_session_window(_dt(9, 15, 0)))
+        self.assertFalse(is_opening_session_window(_dt(8, 44, 59)))
+
+
 class TestCooldownUsesExchangeTs(unittest.TestCase):
     def test_exit_fill_records_exchange_ts_not_system_clock(self):
-        from man import VWAPMomentumStrategy
-
-        strategy = VWAPMomentumStrategy()
+        strategy = make_strategy()
         exit_ts = 1_700_000_000
         strategy.has_position = True
         strategy.position_dir = "Long"
@@ -59,9 +71,9 @@ class TestCooldownUsesExchangeTs(unittest.TestCase):
         self.assertNotEqual(strategy.last_exit_time, int(__import__("time").time()))
 
     def test_cooldown_blocks_until_exchange_ts_elapsed(self):
-        from man import COOLDOWN_SEC, VWAPMomentumStrategy
+        from man import COOLDOWN_SEC
 
-        strategy = VWAPMomentumStrategy()
+        strategy = make_strategy()
         exit_ts = 1_700_000_000
         strategy.last_exit_time = exit_ts
         strategy.current_atr = 100.0
@@ -78,9 +90,7 @@ class TestCooldownUsesExchangeTs(unittest.TestCase):
 
 class TestDailyStateReset(unittest.TestCase):
     def test_reset_on_exchange_date_change(self):
-        from man import VWAPMomentumStrategy
-
-        strategy = VWAPMomentumStrategy()
+        strategy = make_strategy()
         strategy.daily_pnl = -150.0
         strategy.block_new_entry = True
         strategy.consecutive_loss = 3
@@ -94,9 +104,7 @@ class TestDailyStateReset(unittest.TestCase):
         self.assertEqual(strategy._trading_date, datetime.date(2026, 6, 10))
 
     def test_same_day_no_reset(self):
-        from man import VWAPMomentumStrategy
-
-        strategy = VWAPMomentumStrategy()
+        strategy = make_strategy()
         strategy.daily_pnl = -80.0
         strategy.block_new_entry = True
         strategy._trading_date = datetime.date(2026, 6, 10)

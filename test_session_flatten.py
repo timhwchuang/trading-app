@@ -11,6 +11,7 @@ from config import (
     SESSION_FORCE_FLATTEN_TIME,
 )
 from exchange_time import is_at_or_after
+from test_helpers import make_strategy
 
 
 def _dt(hour: int, minute: int, second: int = 0) -> datetime.datetime:
@@ -31,9 +32,7 @@ class TestSessionFlattenTimes(unittest.TestCase):
 
 class TestSessionFlattenStrategy(unittest.TestCase):
     def test_force_flatten_signal(self):
-        from man import VWAPMomentumStrategy
-
-        strategy = VWAPMomentumStrategy()
+        strategy = make_strategy()
         strategy.has_position = True
         strategy.position_dir = "Long"
         strategy.entry_price = 18000.0
@@ -49,9 +48,7 @@ class TestSessionFlattenStrategy(unittest.TestCase):
         self.assertEqual(signal.audit.reason, "session_force_flatten")
 
     def test_no_entry_after_flatten_time(self):
-        from man import VWAPMomentumStrategy
-
-        strategy = VWAPMomentumStrategy()
+        strategy = make_strategy()
         strategy.current_atr = 100.0
         ts = int(_dt(13, 40).timestamp())
 
@@ -60,9 +57,7 @@ class TestSessionFlattenStrategy(unittest.TestCase):
         self.assertIsNone(signal)
 
     def test_force_flatten_overrides_manage_exit(self):
-        from man import VWAPMomentumStrategy
-
-        strategy = VWAPMomentumStrategy()
+        strategy = make_strategy()
         strategy.has_position = True
         strategy.position_dir = "Long"
         strategy.entry_price = 18000.0

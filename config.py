@@ -30,6 +30,7 @@ class Settings:
     product_code: str
 
     vwap_window_min: int
+    entry_band_points: float
     momentum_vol_1s: int
     momentum_buy_ratio: float
     momentum_sell_ratio: float
@@ -45,6 +46,12 @@ class Settings:
     atr_kline_lookback_days: int
     pending_timeout_sec: int
     ioc_slippage_points: int
+    exit_grace_ticks: int
+    exit_grace_sec: int
+    hard_stop_points: int
+    vwap_stop_points: int
+    no_tick_timeout_sec: int
+    clock_skew_warn_sec: float
 
     session_start: datetime.time
     session_end: datetime.time
@@ -86,6 +93,7 @@ def load_config(path: str | Path | None = None) -> Settings:
         simulation=bool(raw.get("simulation", True)),
         product_code=str(raw.get("product_code", "TXFR1")),
         vwap_window_min=int(strategy.get("vwap_window_min", 5)),
+        entry_band_points=float(strategy.get("entry_band_points", 2.0)),
         momentum_vol_1s=int(strategy.get("momentum_vol_1s", 150)),
         momentum_buy_ratio=float(strategy.get("momentum_buy_ratio", 0.80)),
         momentum_sell_ratio=float(strategy.get("momentum_sell_ratio", 0.78)),
@@ -101,6 +109,12 @@ def load_config(path: str | Path | None = None) -> Settings:
         atr_kline_lookback_days=int(strategy.get("atr_kline_lookback_days", 10)),
         pending_timeout_sec=int(strategy.get("pending_timeout_sec", 8)),
         ioc_slippage_points=int(strategy.get("ioc_slippage_points", 3)),
+        exit_grace_ticks=int(strategy.get("exit_grace_ticks", 60)),
+        exit_grace_sec=int(strategy.get("exit_grace_sec", 30)),
+        hard_stop_points=int(strategy.get("hard_stop_points", 6)),
+        vwap_stop_points=int(strategy.get("vwap_stop_points", 3)),
+        no_tick_timeout_sec=int(strategy.get("no_tick_timeout_sec", 45)),
+        clock_skew_warn_sec=float(strategy.get("clock_skew_warn_sec", 1.0)),
         session_start=_parse_time(session.get("start", "08:45")),
         session_end=_parse_time(session.get("end", "13:45")),
         session_flatten_time=_parse_time(session.get("flatten_time", "13:40")),
@@ -125,6 +139,7 @@ settings = load_config()
 SIMULATION = settings.simulation
 PRODUCT_CODE = settings.product_code
 VWAP_WINDOW_MIN = settings.vwap_window_min
+ENTRY_BAND_POINTS = settings.entry_band_points
 MOMENTUM_VOL_1S = settings.momentum_vol_1s
 MOMENTUM_BUY_RATIO = settings.momentum_buy_ratio
 MOMENTUM_SELL_RATIO = settings.momentum_sell_ratio
@@ -140,6 +155,12 @@ ATR_REFRESH_SEC = settings.atr_refresh_sec
 ATR_KLINE_LOOKBACK_DAYS = settings.atr_kline_lookback_days
 PENDING_TIMEOUT_SEC = settings.pending_timeout_sec
 IOC_SLIPPAGE_POINTS = settings.ioc_slippage_points
+EXIT_GRACE_TICKS = settings.exit_grace_ticks
+EXIT_GRACE_SEC = settings.exit_grace_sec
+HARD_STOP_POINTS = settings.hard_stop_points
+VWAP_STOP_POINTS = settings.vwap_stop_points
+NO_TICK_TIMEOUT_SEC = settings.no_tick_timeout_sec
+CLOCK_SKEW_WARN_SEC = settings.clock_skew_warn_sec
 SESSION_START = settings.session_start
 SESSION_END = settings.session_end
 SESSION_FLATTEN_TIME = settings.session_flatten_time
@@ -158,3 +179,6 @@ API_KEY = os.environ.get("SJ_API_KEY", "YOUR_API_KEY")
 SECRET_KEY = os.environ.get("SJ_SEC_KEY", "YOUR_SECRET_KEY")
 CA_PATH = os.environ.get("SJ_CA_PATH", "")
 CA_PASSWD = os.environ.get("SJ_CA_PASSWD", "")
+
+_DUMP_ORDER_EVENTS = os.environ.get("DUMP_ORDER_EVENTS", "").strip().lower()
+DUMP_ORDER_EVENTS = _DUMP_ORDER_EVENTS in ("1", "true", "yes")

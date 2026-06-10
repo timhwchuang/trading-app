@@ -1,6 +1,7 @@
 import shioaji as sj
 from shioaji import OrderState, TickFOPv1
 import atexit
+import os
 import time
 import datetime
 import logging
@@ -10,11 +11,12 @@ import sys
 from collections import deque
 import threading
 from dataclasses import dataclass
-from typing import Deque, List, Optional, Tuple
+from typing import Any, Deque, List, Optional, Tuple
 
 from exchange_time import (
     compute_vol_threshold,
     is_at_or_after,
+    is_opening_session_window,
     is_trading_session as _is_trading_session,
     trading_day_for_daily_reset,
 )
@@ -22,6 +24,7 @@ from signal_audit import SignalAudit, format_signal_audit
 
 from config import (
     API_KEY,
+    DUMP_ORDER_EVENTS,
     ATR_KLINE_LOOKBACK_DAYS,
     ATR_PERIOD,
     ATR_REFRESH_SEC,
@@ -29,10 +32,15 @@ from config import (
     BASE_VOL,
     CA_PASSWD,
     CA_PATH,
+    CLOCK_SKEW_WARN_SEC,
     COOLDOWN_SEC,
+    ENTRY_BAND_POINTS,
     EXHAUSTION_VOL,
     FIXED_TP_POINTS,
+    EXIT_GRACE_SEC,
+    EXIT_GRACE_TICKS,
     FLATTEN_SLIPPAGE_POINTS,
+    HARD_STOP_POINTS,
     IOC_SLIPPAGE_POINTS,
     LOG_FILE,
     LOG_LEVEL,
@@ -40,6 +48,7 @@ from config import (
     MAX_DAILY_LOSS_POINTS,
     MIN_ATR_THRESHOLD,
     MOMENTUM_BUY_RATIO,
+    NO_TICK_TIMEOUT_SEC,
     MOMENTUM_SELL_RATIO,
     OPEN_MULT_FUTURES,
     OPEN_MULT_NORMAL,
@@ -53,6 +62,7 @@ from config import (
     SESSION_START,
     SIMULATION,
     TRAIL_POINTS,
+    VWAP_STOP_POINTS,
     VWAP_WINDOW_MIN,
     settings,
 )
@@ -99,7 +109,12 @@ def setup_async_logging(
     sink_handlers.append(stream_handler)
 
     if log_file:
-        file_handler = logging.FileHandler(log_file)
+        file_handler = logging.handlers.TimedRotatingFileHandler(
+            log_file,
+            when="midnight",
+            backupCount=14,
+            encoding="utf-8",
+        )
         file_handler.setFormatter(formatter)
         sink_handlers.append(file_handler)
 
@@ -135,13 +150,15 @@ class OrderSignal:
 
 
 class VWAPMomentumStrategy:
-    def __init__(self):
-        self.api = sj.Shioaji(simulation=SIMULATION)
+    def __init__(self, api: Any = None):
+        self.api = api if api is not None else sj.Shioaji(simulation=SIMULATION)
 
         # 持倉狀態
         self.has_position = False
         self.position_dir = "Flat"          # Long / Short / Flat
         self.entry_price = 0.0
+        self.entry_exchange_ts = 0
+        self.ticks_since_entry = 0
         self.momentum_active = False
         self.momentum_dir = "None"
         self.momentum_peak = 0.0
@@ -181,10 +198,49 @@ class VWAPMomentumStrategy:
         # ATR
         self.current_atr = 0.0
         self.last_atr_refresh = 0.0
+        self._atr_long_lookback_date: Optional[datetime.date] = None
 
         self.lock = threading.Lock()
         self.contract = None
         self._running = False
+        self._raw_order_evt_dumped: set = set()
+        self.last_tick_exchange_ts = 0
+        self._last_tick_wall_time = 0.0
+        self._last_tick_exchange_dt: Optional[datetime.datetime] = None
+        self._tick_type_counts = {0: 0, 1: 0, 2: 0}
+        self._last_tick_type_log_wall = 0.0
+        self._last_clock_skew_warn_wall = 0.0
+        self._last_no_tick_resubscribe_wall = 0.0
+        self._pending_intent_cancel_exchange_dt: Optional[datetime.datetime] = None
+
+    def _activate_ca(self) -> None:
+        """P4-10: 先無 person_id；失敗則以 env / 帳號 person_id 重試。"""
+        try:
+            if self.api.activate_ca(ca_path=CA_PATH, ca_passwd=CA_PASSWD):
+                logger.info("CA 憑證啟用成功")
+                return
+        except Exception as e:
+            logger.warning("CA 啟用失敗（無 person_id）: %s", e)
+
+        person_id = os.environ.get("SJ_CA_PERSON_ID") or getattr(
+            self.api.futopt_account, "person_id", None
+        )
+        if not person_id:
+            raise RuntimeError(
+                "CA 憑證啟用失敗；請設定 SJ_CA_PERSON_ID 或確認券商帳號 person_id"
+            )
+
+        if not self.api.activate_ca(
+            ca_path=CA_PATH, ca_passwd=CA_PASSWD, person_id=person_id
+        ):
+            raise RuntimeError(f"CA 憑證啟用失敗（person_id={person_id}）")
+        logger.info("CA 憑證啟用成功（person_id）")
+
+    def _require_futopt_account(self) -> None:
+        if self.api.futopt_account is None:
+            raise RuntimeError(
+                "無期貨帳號，請確認帳號已開通期貨並完成簽署"
+            )
 
     def login(self):
         self.api.login(
@@ -192,6 +248,7 @@ class VWAPMomentumStrategy:
             secret_key=SECRET_KEY,
             subscribe_trade=True,
         )
+        self._require_futopt_account()
         self.contract = self._resolve_contract()
         logger.info(
             "登入成功 | 合約: %s | 模擬: %s | 帳號: %s",
@@ -203,11 +260,50 @@ class VWAPMomentumStrategy:
         if not SIMULATION:
             if not CA_PATH or not CA_PASSWD:
                 raise RuntimeError("正式模式需設定 SJ_CA_PATH 與 SJ_CA_PASSWD")
-            self.api.activate_ca(ca_path=CA_PATH, ca_passwd=CA_PASSWD)
+            self._activate_ca()
             self.api.subscribe_trade(self.api.futopt_account)
 
         self.sync_positions()
         self.refresh_atr()
+        self._log_api_usage("login")
+
+    @staticmethod
+    def _atr_kline_start(
+        today: datetime.date,
+        *,
+        current_atr: float,
+        long_lookback_days: int,
+        long_lookback_done_for: Optional[datetime.date],
+    ) -> tuple[datetime.date, bool]:
+        """P4-9: 開盤/ATR=0 用長 lookback；盤中僅抓當日 K 線。"""
+        if current_atr <= 0 or long_lookback_done_for != today:
+            return today - datetime.timedelta(days=long_lookback_days), True
+        return today, False
+
+    def _log_api_usage(self, context: str) -> None:
+        try:
+            usage = self.api.usage()
+        except Exception as e:
+            logger.warning("API usage 查詢失敗 (%s): %s", context, e)
+            return
+
+        logger.info(
+            "API usage [%s] | bytes=%s limit=%s remaining=%s connections=%s",
+            context,
+            usage.bytes,
+            usage.limit_bytes,
+            usage.remaining_bytes,
+            usage.connections,
+        )
+        if (
+            usage.limit_bytes > 0
+            and usage.remaining_bytes < usage.limit_bytes * 0.1
+        ):
+            logger.warning(
+                "API 流量剩餘 < 10%% | remaining=%s limit=%s",
+                usage.remaining_bytes,
+                usage.limit_bytes,
+            )
 
     def _contract_position_codes(self) -> set:
         codes = {self.contract.code}
@@ -242,6 +338,7 @@ class VWAPMomentumStrategy:
                 self.position_dir = "Flat"
                 self.entry_price = 0.0
                 self.trailing_peak = 0.0
+                self._clear_entry_tracking()
                 open_positions = [
                     p for p in positions if int(p.quantity) != 0
                 ]
@@ -262,6 +359,7 @@ class VWAPMomentumStrategy:
             self.entry_price = float(matched.price)
             self.trailing_peak = self.entry_price
             self._resynced_position = True
+            self._activate_vwap_stop_immediately()
             self.reset_momentum()
             logger.info(
                 "持倉對帳 | %s %d口 @ %.1f | code=%s | peak 待首 tick 校準",
@@ -294,6 +392,7 @@ class VWAPMomentumStrategy:
 
     def on_tick(self, tick: TickFOPv1):
         ts, price, volume, tick_type = self._parse_tick(tick)
+        self._record_tick_arrival(ts, tick.datetime, tick_type)
 
         if volume >= 20:
             logger.debug(
@@ -306,6 +405,7 @@ class VWAPMomentumStrategy:
             self.update_vwap(ts, price, volume)
             self.update_momentum(ts, volume, tick_type)
             if self.has_position:
+                self.ticks_since_entry += 1
                 if self._resynced_position:
                     self._calibrate_trailing_peak_after_resync(price)
                 self._update_trailing_peak(price)
@@ -313,6 +413,8 @@ class VWAPMomentumStrategy:
                 self._update_momentum_peak(price)
             signal = self.process_strategy(ts, price, tick.datetime)
             if signal is not None:
+                if signal.intent == "entry":
+                    self._pending_intent_cancel_exchange_dt = tick.datetime
                 self._arm_pending(signal)
                 self._log_signal_audit(signal)
 
@@ -327,7 +429,15 @@ class VWAPMomentumStrategy:
     def refresh_atr(self):
         try:
             today = datetime.date.today()
-            start = today - datetime.timedelta(days=ATR_KLINE_LOOKBACK_DAYS)
+            with self.lock:
+                current_atr = self.current_atr
+                long_done = self._atr_long_lookback_date
+            start, used_long = self._atr_kline_start(
+                today,
+                current_atr=current_atr,
+                long_lookback_days=ATR_KLINE_LOOKBACK_DAYS,
+                long_lookback_done_for=long_done,
+            )
             kbars = self.api.kbars(
                 contract=self.contract,
                 start=start.isoformat(),
@@ -336,12 +446,21 @@ class VWAPMomentumStrategy:
             atr = self._compute_atr(kbars)
             with self.lock:
                 self.current_atr = atr
+                if used_long:
+                    self._atr_long_lookback_date = today
+            lookback_label = (
+                f"{ATR_KLINE_LOOKBACK_DAYS}d"
+                if used_long
+                else "當日"
+            )
             logger.info(
-                "ATR(%d) 更新: %.2f | lookback=%d 天",
+                "ATR(%d) 更新: %.2f | start=%s lookback=%s",
                 ATR_PERIOD,
                 atr,
-                ATR_KLINE_LOOKBACK_DAYS,
+                start.isoformat(),
+                lookback_label,
             )
+            self._log_api_usage("atr_refresh")
         except Exception as e:
             logger.warning("ATR 更新失敗: %s", e)
 
@@ -373,6 +492,82 @@ class VWAPMomentumStrategy:
             old_peak,
             self.trailing_peak,
         )
+
+    def _record_tick_arrival(
+        self, ts: int, exchange_dt: datetime.datetime, tick_type: int
+    ) -> None:
+        self.last_tick_exchange_ts = ts
+        self._last_tick_wall_time = time.time()
+        self._last_tick_exchange_dt = exchange_dt
+        bucket = tick_type if tick_type in self._tick_type_counts else 0
+        self._tick_type_counts[bucket] = self._tick_type_counts.get(bucket, 0) + 1
+        self._maybe_warn_clock_skew(ts)
+
+    def _maybe_warn_clock_skew(self, exchange_ts: int) -> None:
+        skew = abs(exchange_ts - time.time())
+        if skew <= CLOCK_SKEW_WARN_SEC:
+            return
+        now = time.time()
+        if now - self._last_clock_skew_warn_wall < 300:
+            return
+        self._last_clock_skew_warn_wall = now
+        logger.warning(
+            "系統鐘與交易所時間偏差 %.1fs | 策略決策仍以 tick 時間為準",
+            skew,
+        )
+
+    def _maybe_log_tick_type_summary(self) -> None:
+        """P1-3: 每 30 分鐘輸出 tick_type 分布（UAT 觀測）。"""
+        if self._last_tick_exchange_dt is None:
+            return
+        if not _is_trading_session(
+            self._last_tick_exchange_dt, SESSION_START, SESSION_END
+        ):
+            return
+        now = time.time()
+        if now - self._last_tick_type_log_wall < 1800:
+            return
+        total = sum(self._tick_type_counts.values())
+        if total == 0:
+            return
+        self._last_tick_type_log_wall = now
+        logger.info(
+            "tick_type 分布 | type0=%d type1=%d type2=%d total=%d "
+            "| type0_pct=%.1f%%",
+            self._tick_type_counts.get(0, 0),
+            self._tick_type_counts.get(1, 0),
+            self._tick_type_counts.get(2, 0),
+            total,
+            100.0 * self._tick_type_counts.get(0, 0) / total,
+        )
+
+    def _check_no_tick_watchdog(self) -> None:
+        """P4-8: 交易時段內長時間無 tick → 告警並嘗試重訂閱。"""
+        if not self._api_connected or self.contract is None:
+            return
+        if self._last_tick_exchange_dt is None or self._last_tick_wall_time <= 0:
+            return
+        if not _is_trading_session(
+            self._last_tick_exchange_dt, SESSION_START, SESSION_END
+        ):
+            return
+        silent = time.time() - self._last_tick_wall_time
+        if silent < NO_TICK_TIMEOUT_SEC:
+            return
+        now = time.time()
+        if now - self._last_no_tick_resubscribe_wall < 60:
+            return
+        self._last_no_tick_resubscribe_wall = now
+        logger.warning(
+            "No-tick 看門狗 | %.0fs 無 tick，嘗試重訂閱 %s",
+            silent,
+            self.contract.code,
+        )
+        try:
+            self.api.subscribe(self.contract, quote_type=sj.QuoteType.Tick)
+            logger.info("No-tick 看門狗 | 重訂閱已送出")
+        except Exception as e:
+            logger.warning("No-tick 看門狗 | 重訂閱失敗: %s", e)
 
     def _arm_pending(self, signal: OrderSignal) -> None:
         """P2-2: lock 內同步設 pending，堵住雙 tick 雙單。"""
@@ -592,8 +787,7 @@ class VWAPMomentumStrategy:
             self.reset_momentum()
             return None
 
-        dynamic_threshold = max(2.0, self.current_vwap * 0.0001)
-        near_vwap = abs(price - self.current_vwap) <= dynamic_threshold
+        near_vwap = abs(price - self.current_vwap) <= ENTRY_BAND_POINTS
         exhausted = self.vol_1s <= EXHAUSTION_VOL
 
         if not (near_vwap and exhausted):
@@ -630,14 +824,54 @@ class VWAPMomentumStrategy:
         self.momentum_peak = 0.0
         self.momentum_trigger_time = 0
 
+    def _clear_entry_tracking(self) -> None:
+        self.entry_exchange_ts = 0
+        self.ticks_since_entry = 0
+
+    def _begin_entry_tracking(self, exchange_ts: int) -> None:
+        self.entry_exchange_ts = exchange_ts
+        self.ticks_since_entry = 0
+
+    def _activate_vwap_stop_immediately(self) -> None:
+        """重啟對帳持倉：進場時間未知，直接啟用 VWAP 停損。"""
+        self.entry_exchange_ts = 0
+        self.ticks_since_entry = EXIT_GRACE_TICKS
+
+    def _in_exit_grace_period(self, ts: int) -> bool:
+        """保護期內僅硬停損；須同時滿足 tick 數與秒數才啟用 VWAP 停損。"""
+        if self.ticks_since_entry < EXIT_GRACE_TICKS:
+            return True
+        if self.entry_exchange_ts <= 0:
+            return False
+        return (ts - self.entry_exchange_ts) < EXIT_GRACE_SEC
+
+    def _stop_loss_hit(
+        self, price: float, ts: int, *, is_long: bool
+    ) -> tuple[bool, str]:
+        if is_long:
+            hard_hit = price <= self.entry_price - HARD_STOP_POINTS
+            vwap_hit = price <= self.current_vwap - VWAP_STOP_POINTS
+        else:
+            hard_hit = price >= self.entry_price + HARD_STOP_POINTS
+            vwap_hit = price >= self.current_vwap + VWAP_STOP_POINTS
+
+        if self._in_exit_grace_period(ts):
+            return (hard_hit, "stop_loss") if hard_hit else (False, "")
+
+        if hard_hit:
+            return True, "stop_loss"
+        if vwap_hit:
+            return True, "stop_loss_vwap"
+        return False, ""
+
     def manage_exit(self, price: float, ts: int) -> Optional[OrderSignal]:
         if self.position_dir == "Long":
-            sl_hit = price <= self.entry_price - 6 or price <= self.current_vwap - 3
+            sl_hit, sl_reason = self._stop_loss_hit(price, ts, is_long=True)
             tp_hit = price >= self.entry_price + FIXED_TP_POINTS
             trail_hit = price <= self.trailing_peak - TRAIL_POINTS
             if sl_hit or tp_hit or trail_hit:
                 reason = (
-                    "stop_loss"
+                    sl_reason
                     if sl_hit
                     else "take_profit"
                     if tp_hit
@@ -652,12 +886,12 @@ class VWAPMomentumStrategy:
                     audit=self._build_exit_audit(price, ts, "Sell", reason),
                 )
         else:
-            sl_hit = price >= self.entry_price + 6 or price >= self.current_vwap + 3
+            sl_hit, sl_reason = self._stop_loss_hit(price, ts, is_long=False)
             tp_hit = price <= self.entry_price - FIXED_TP_POINTS
             trail_hit = price >= self.trailing_peak + TRAIL_POINTS
             if sl_hit or tp_hit or trail_hit:
                 reason = (
-                    "stop_loss"
+                    sl_reason
                     if sl_hit
                     else "take_profit"
                     if tp_hit
@@ -734,7 +968,21 @@ class VWAPMomentumStrategy:
             with self.lock:
                 self._clear_pending()
 
+    def _maybe_dump_raw_order_event(self, stat, msg) -> None:
+        if not DUMP_ORDER_EVENTS:
+            return
+        if stat in self._raw_order_evt_dumped:
+            return
+        self._raw_order_evt_dumped.add(stat)
+        logger.info(
+            "RAW_ORDER_EVT %s | keys=%s | %r",
+            stat,
+            list(msg.keys()),
+            msg,
+        )
+
     def handle_order_event(self, stat, msg):
+        self._maybe_dump_raw_order_event(stat, msg)
         needs_sync = False
         with self.lock:
             if stat == OrderState.FuturesOrder:
@@ -800,8 +1048,17 @@ class VWAPMomentumStrategy:
             deal_qty = msg.get("status", {}).get("deal_quantity", 0)
             if deal_qty == 0:
                 if self.pending_intent == "entry":
+                    tag = "intent_cancelled"
+                    if (
+                        self._pending_intent_cancel_exchange_dt is not None
+                        and is_opening_session_window(
+                            self._pending_intent_cancel_exchange_dt
+                        )
+                    ):
+                        tag = "intent_cancelled_open_session"
                     logger.info(
-                        "委託未成交/已取消，重置 pending | tag=intent_cancelled"
+                        "委託未成交/已取消，重置 pending | tag=%s",
+                        tag,
                     )
                 else:
                     logger.info("委託未成交/已取消，重置 pending")
@@ -857,6 +1114,7 @@ class VWAPMomentumStrategy:
             self.entry_price = price
             self.position_dir = "Long" if is_buy else "Short"
             self.trailing_peak = price
+            self._begin_entry_tracking(self.pending_exchange_ts)
             self.reset_momentum()
             self._clear_pending()
             logger.info("進場完成 | %s %d口 @ %.1f", self.position_dir, deal_qty, price)
@@ -878,6 +1136,7 @@ class VWAPMomentumStrategy:
             self.position_dir = "Flat"
             self.entry_price = 0.0
             self.trailing_peak = 0.0
+            self._clear_entry_tracking()
             self.last_exit_time = self.pending_exchange_ts
             self._clear_pending()
             logger.info(
@@ -1003,8 +1262,10 @@ class VWAPMomentumStrategy:
         while self._running:
             try:
                 self._check_pending_timeout()
+                self._check_no_tick_watchdog()
+                self._maybe_log_tick_type_summary()
             except Exception as e:
-                logger.warning("Pending 超時檢查異常: %s", e)
+                logger.warning("背景維運檢查異常: %s", e)
             time.sleep(1)
 
     def _clear_pending(self):
