@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Logs
+*.log
+logs/
+
+# Secrets & certificates (use env vars: SJ_API_KEY, SJ_CA_PATH, etc.)
+.env
+.env.*
+*.pfx
+*.p12
+*.pem
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Build / packaging
+dist/
+build/
+*.egg-info/
+.eggs/

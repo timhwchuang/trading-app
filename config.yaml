@@ -1,0 +1,112 @@
+# =============================================================================
+# VWAP Momentum 策略參數（非密鑰）
+# 目標執行環境：Windows（見 README.md）
+# =============================================================================
+#
+# 密鑰請用環境變數（PowerShell 範例）：
+#   $env:SJ_API_KEY = "your_api_key"
+#   $env:SJ_SEC_KEY = "your_secret_key"
+#   $env:SJ_CA_PATH = "C:\certs\Sinopac.pfx"
+#   $env:SJ_CA_PASSWD = "your_ca_password"
+#
+# 可選覆寫：
+#   $env:CONFIG_PATH = "C:\theman\config.yaml"
+#   $env:LOG_LEVEL = "DEBUG"
+#   $env:LOG_FILE = "C:\logs\theman.log"
+
+# 是否使用 Shioaji 模擬環境（上線前務必改為 false）
+simulation: true
+
+# 交易商品代碼（近月台指期，例：TXFR1）
+product_code: TXFR1
+
+strategy:
+  # VWAP 滾動視窗長度（分鐘）；用於計算當前 VWAP 與出場 VWAP 停損
+  vwap_window_min: 5
+
+  # 1 秒內總成交量門檻；觸發動量突破偵測（P1-2 完成後改由 vol_threshold 動態計算）
+  momentum_vol_1s: 150
+
+  # 做多時買盤量佔 1 秒總量最低比例（0.80 = 80% 買量才視為多方動量）
+  momentum_buy_ratio: 0.80
+
+  # 做空時賣盤量佔 1 秒總量最低比例（0.78 = 78% 賣量才視為空方動量）
+  momentum_sell_ratio: 0.78
+
+  # 動量衰竭門檻：1 秒量低於此值視為量能枯竭，結束 momentum 等待 pullback
+  exhaustion_vol: 15
+
+  # 平倉後冷卻時間（秒）；防止剛出場又立刻進場
+  cooldown_sec: 10
+
+  # 單日最大虧損點數；觸發後禁止新進場（持倉仍可平倉）
+  max_daily_loss_points: 120
+
+  # 連續虧損筆數上限；達標後當日不再新進場
+  max_consecutive_loss: 4
+
+  # 固定停利點數（多單 entry + N，空單 entry - N）
+  fixed_tp_points: 20
+
+  # Trailing Stop 回落點數（多單從高點回落 N 點出場，空單從低點反彈 N 點出場）
+  trail_points: 8
+
+  # ATR 計算週期（K 線根數）
+  atr_period: 20
+
+  # 波動濾鏡：ATR 低於此值不交易（過濾平淡市況）
+  min_atr_threshold: 25
+
+  # ATR 重新計算間隔（秒）；背景執行緒拉 K 線更新
+  atr_refresh_sec: 300
+
+  # 請求 K 線時往前回溯天數（P1-1；解決週一 / 連假後 ATR 斷層）
+  atr_kline_lookback_days: 10
+
+  # IOC 委託 pending 超時（秒）；超時後補查並解鎖狀態機
+  pending_timeout_sec: 8
+
+  # IOC 限價讓價點數（買 = ref + N，賣 = ref - N）；全日固定，開盤不放大
+  ioc_slippage_points: 3
+
+session:
+  # 日盤允許交易起始時間（台指期期貨開盤，exchange time）
+  start: "08:45"
+
+  # 日盤停止新信號時間（含）；之後不再產生進場
+  end: "13:45"
+
+  # 收盤前禁止新進場時間（P2-3）；此時間後不再產生 entry signal
+  flatten_time: "13:40"
+
+  # 收盤前強制平倉時間（P2-3）；仍有持倉則 aggressive IOC 出場
+  force_flatten_time: "13:44"
+
+  # 強制平倉 IOC 讓價點數（僅 session_force_flatten 使用，高於一般進場 ±3）
+  flatten_slippage_points: 8
+
+# 開盤量能階梯係數（P1-2；實作後啟用）
+# vol_threshold = max(base_vol, atr * atr_vol_mult) * multiplier
+opening_volume:
+  # 量能地板；動態閾值不會低於此值
+  base_vol: 150
+
+  # 常態時段 ATR 換算係數（09:15 後 multiplier = mult_normal）
+  atr_vol_mult: 1.0
+
+  # 08:45-09:00 期貨開盤爆量期倍率（建議 2.5-3.0）
+  mult_futures: 2.5
+
+  # 09:00-09:15 現貨開盤衝擊期倍率（建議 1.5-2.0）
+  mult_spot: 1.5
+
+  # 09:15 之後常態流動性倍率
+  mult_normal: 1.0
+
+logging:
+  # 日誌等級：DEBUG / INFO / WARNING（生產環境建議 INFO；可被 LOG_LEVEL env 覆寫）
+  level: INFO
+
+  # 日誌檔案路徑（Windows 例：C:\logs\theman.log）；空字串 = 僅輸出終端
+  # 可被 LOG_FILE env 覆寫；磁碟 I/O 在背景 QueueListener 執行緒
+  file: ""
