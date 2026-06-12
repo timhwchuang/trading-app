@@ -1,4 +1,4 @@
-"""P2-7: Parse strategy log and report UAT metrics from SIGNAL_AUDIT + MOMENTUM lines."""
+"""Parse strategy logs: SIGNAL_AUDIT, FILL_AUDIT, DAILY_SUMMARY → UAT metrics."""
 
 from __future__ import annotations
 
@@ -8,11 +8,19 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-
+from observability import FillAudit
 from signal_audit import SignalAudit
 
 MOMENTUM_TRIGGER_RE = re.compile(r"MOMENTUM (Long|Short) 突破")
 SIGNAL_AUDIT_RE = re.compile(r"SIGNAL_AUDIT (.+)$")
+FILL_AUDIT_RE = re.compile(r"FILL_AUDIT (.+)$")
+DAILY_SUMMARY_RE = re.compile(r"DAILY_SUMMARY (.+)$")
+INTENT_CANCELLED_RE = re.compile(
+    r"委託未成交/已取消，重置 pending \| tag=(intent_cancelled(?:_open_session)?)"
+)
+TICK_TYPE_RE = re.compile(
+    r"tick_type 分布 \| type0=(\d+) type1=(\d+) type2=(\d+) total=(\d+)"
+)
 
 
 @dataclass
@@ -21,6 +29,7 @@ class TradeRound:
     entry_direction: str
     exit_ts: int | None = None
     exit_reason: str = ""
+    hold_sec: int | None = None
 
 
 def parse_signal_audit_line(line: str) -> SignalAudit | None:
@@ -32,6 +41,27 @@ def parse_signal_audit_line(line: str) -> SignalAudit | None:
     except json.JSONDecodeError:
         return None
     return SignalAudit(**payload)
+
+
+def parse_fill_audit_line(line: str) -> FillAudit | None:
+    match = FILL_AUDIT_RE.search(line)
+    if not match:
+        return None
+    try:
+        payload = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return None
+    return FillAudit(**payload)
+
+
+def parse_daily_summary_line(line: str) -> dict | None:
+    match = DAILY_SUMMARY_RE.search(line)
+    if not match:
+        return None
+    try:
+        return json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return None
 
 
 def count_momentum_triggers(lines: list[str]) -> int:
@@ -55,6 +85,7 @@ def build_trade_rounds(audits: list[SignalAudit]) -> list[TradeRound]:
                 continue
             open_round.exit_ts = audit.ts
             open_round.exit_reason = audit.reason
+            open_round.hold_sec = audit.ts - open_round.entry_ts
             rounds.append(open_round)
             open_round = None
 
@@ -62,6 +93,112 @@ def build_trade_rounds(audits: list[SignalAudit]) -> list[TradeRound]:
         rounds.append(open_round)
 
     return rounds
+
+
+def build_trade_rounds_from_fills(fills: list[FillAudit]) -> list[TradeRound]:
+    rounds: list[TradeRound] = []
+    open_round: TradeRound | None = None
+
+    for fill in fills:
+        if fill.intent == "entry":
+            if open_round is not None:
+                rounds.append(open_round)
+            open_round = TradeRound(
+                entry_ts=fill.ts,
+                entry_direction=fill.direction,
+            )
+        elif fill.intent == "exit":
+            if open_round is None:
+                continue
+            open_round.exit_ts = fill.ts
+            open_round.exit_reason = fill.exit_reason
+            open_round.hold_sec = fill.hold_sec
+            rounds.append(open_round)
+            open_round = None
+
+    if open_round is not None:
+        rounds.append(open_round)
+
+    return rounds
+
+
+def _percentile(values: list[float], pct: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return round(ordered[0], 2)
+    rank = (pct / 100) * (len(ordered) - 1)
+    low = int(rank)
+    high = min(low + 1, len(ordered) - 1)
+    weight = rank - low
+    return round(ordered[low] * (1 - weight) + ordered[high] * weight, 2)
+
+
+def slippage_stats(fills: list[FillAudit]) -> dict:
+    entry = [f.slippage_pts for f in fills if f.intent == "entry"]
+    exit_ = [f.slippage_pts for f in fills if f.intent == "exit"]
+    return {
+        "entry_median": _percentile(entry, 50) if entry else None,
+        "entry_p90": _percentile(entry, 90),
+        "exit_median": _percentile(exit_, 50) if exit_ else None,
+        "exit_p90": _percentile(exit_, 90),
+        "entry_count": len(entry),
+        "exit_count": len(exit_),
+    }
+
+
+def expectancy_by_reason(fills: list[FillAudit]) -> dict[str, dict]:
+    buckets: dict[str, list[float]] = {}
+    for fill in fills:
+        if fill.intent != "exit" or not fill.exit_reason:
+            continue
+        buckets.setdefault(fill.exit_reason, []).append(fill.pnl_points)
+
+    result: dict[str, dict] = {}
+    for reason, pnls in buckets.items():
+        count = len(pnls)
+        total = round(sum(pnls), 2)
+        result[reason] = {
+            "count": count,
+            "total_pnl": total,
+            "avg_pnl": round(total / count, 2) if count else 0.0,
+        }
+    return result
+
+
+def count_intent_cancelled(lines: list[str]) -> dict[str, int]:
+    counts = {"intent_cancelled": 0, "intent_cancelled_open_session": 0}
+    for line in lines:
+        match = INTENT_CANCELLED_RE.search(line)
+        if match:
+            counts[match.group(1)] = counts.get(match.group(1), 0) + 1
+    return counts
+
+
+def latest_tick_type_line(lines: list[str]) -> dict | None:
+    for line in reversed(lines):
+        match = TICK_TYPE_RE.search(line)
+        if not match:
+            continue
+        t0, t1, t2, total = (int(match.group(i)) for i in range(1, 5))
+        return {
+            "type0": t0,
+            "type1": t1,
+            "type2": t2,
+            "total": total,
+            "type0_pct": round(100.0 * t0 / total, 2) if total else None,
+        }
+    return None
+
+
+def parse_daily_summaries(lines: list[str]) -> list[dict]:
+    summaries: list[dict] = []
+    for line in lines:
+        summary = parse_daily_summary_line(line)
+        if summary is not None:
+            summaries.append(summary)
+    return summaries
 
 
 def compute_metrics(
@@ -75,30 +212,57 @@ def compute_metrics(
         for line in lines
         if (audit := parse_signal_audit_line(line)) is not None
     ]
+    fills = [
+        fill for line in lines if (fill := parse_fill_audit_line(line)) is not None
+    ]
     entries = [a for a in audits if a.intent == "entry"]
     exits = [a for a in audits if a.intent == "exit"]
-    rounds = build_trade_rounds(audits)
+    rounds = build_trade_rounds_from_fills(fills) if fills else build_trade_rounds(audits)
     completed = [r for r in rounds if r.exit_ts is not None]
 
     stop_loss_reasons = {"stop_loss", "stop_loss_vwap"}
-    quick_stop_loss = [
+    quick_stop_loss_rounds = [
         r
         for r in completed
         if r.exit_reason in stop_loss_reasons
         and r.exit_ts is not None
         and (r.exit_ts - r.entry_ts) < quick_sl_sec
     ]
+    quick_stop_loss_fills = [
+        f
+        for f in fills
+        if f.intent == "exit"
+        and f.exit_reason in stop_loss_reasons
+        and f.hold_sec < quick_sl_sec
+    ]
 
     exit_reasons: dict[str, int] = {}
     for audit in exits:
         exit_reasons[audit.reason] = exit_reasons.get(audit.reason, 0) + 1
 
+    cancel_counts = count_intent_cancelled(lines)
+    daily_summaries = parse_daily_summaries(lines)
+    tick_type = latest_tick_type_line(lines)
+
     conversion_rate = (
         len(entries) / momentum_triggers if momentum_triggers else None
     )
-    quick_sl_rate = (
-        len(quick_stop_loss) / len(completed) if completed else None
+    quick_sl_count = (
+        len(quick_stop_loss_fills) if fills else len(quick_stop_loss_rounds)
     )
+    quick_sl_rate = quick_sl_count / len(completed) if completed else None
+    cancel_rate = (
+        cancel_counts["intent_cancelled"] / len(entries) if entries else None
+    )
+    open_cancel_rate = (
+        cancel_counts["intent_cancelled_open_session"] / len(entries)
+        if entries
+        else None
+    )
+
+    near_miss = None
+    if daily_summaries:
+        near_miss = daily_summaries[-1].get("near_miss")
 
     return {
         "momentum_triggers": momentum_triggers,
@@ -107,19 +271,137 @@ def compute_metrics(
         "momentum_to_entry_conversion": conversion_rate,
         "completed_rounds": len(completed),
         "open_rounds": len(rounds) - len(completed),
-        f"quick_stop_loss_lt_{quick_sl_sec}s": len(quick_stop_loss),
+        f"quick_stop_loss_lt_{quick_sl_sec}s": quick_sl_count,
         f"quick_stop_loss_rate_lt_{quick_sl_sec}s": quick_sl_rate,
         "exit_reasons": exit_reasons,
-        "quick_stop_loss_examples": [
-            {
-                "direction": r.entry_direction,
-                "entry_ts": r.entry_ts,
-                "exit_ts": r.exit_ts,
-                "hold_sec": (r.exit_ts - r.entry_ts) if r.exit_ts else None,
-            }
-            for r in quick_stop_loss[:10]
-        ],
+        "slippage": slippage_stats(fills),
+        "expectancy_by_reason": expectancy_by_reason(fills),
+        "intent_cancelled": cancel_counts,
+        "intent_cancel_rate": cancel_rate,
+        "open_session_cancel_rate": open_cancel_rate,
+        "tick_type": tick_type,
+        "near_miss": near_miss,
+        "daily_summaries": daily_summaries,
+        "fill_count": len(fills),
+        "quick_stop_loss_examples": (
+            [
+                {
+                    "direction": f.direction,
+                    "exit_ts": f.ts,
+                    "hold_sec": f.hold_sec,
+                    "exit_reason": f.exit_reason,
+                    "slippage_pts": f.slippage_pts,
+                }
+                for f in quick_stop_loss_fills[:10]
+            ]
+            if fills
+            else [
+                {
+                    "direction": r.entry_direction,
+                    "entry_ts": r.entry_ts,
+                    "exit_ts": r.exit_ts,
+                    "hold_sec": r.hold_sec,
+                    "exit_reason": r.exit_reason,
+                }
+                for r in quick_stop_loss_rounds[:10]
+            ]
+        ),
+        "tuning_hints": build_tuning_hints(
+            conversion_rate=conversion_rate,
+            quick_sl_rate=quick_sl_rate,
+            slippage=slippage_stats(fills),
+            expectancy=expectancy_by_reason(fills),
+            near_miss=near_miss,
+            cancel_rate=open_cancel_rate,
+            tick_type=tick_type,
+            daily_summaries=daily_summaries,
+        ),
     }
+
+
+def build_tuning_hints(
+    *,
+    conversion_rate: float | None,
+    quick_sl_rate: float | None,
+    slippage: dict,
+    expectancy: dict[str, dict],
+    near_miss: dict | None,
+    cancel_rate: float | None,
+    tick_type: dict | None,
+    daily_summaries: list[dict],
+) -> list[str]:
+    """Rule-based hints for humans / AI — maps KPIs to candidate params."""
+    hints: list[str] = []
+
+    if quick_sl_rate is not None and quick_sl_rate > 0.30:
+        hints.append(
+            "quick_sl_rate>30% → 考慮放長 exit_grace_ticks / exit_grace_sec，"
+            "或放寬 vwap_stop_points"
+        )
+    if conversion_rate is not None and conversion_rate < 0.10:
+        hints.append(
+            "動量→進場轉換率<10% → 檢查 near_miss.closest_vwap_distance 是否多數"
+            "> entry_band_points；考慮放寬 entry_band_points 或 exhaustion_vol"
+        )
+    if near_miss:
+        closest = near_miss.get("closest_vwap_distance")
+        if closest is not None and closest > 2.0:
+            hints.append(
+                f"closest_vwap_distance={closest} > entry_band_points → pullback 常差一點進場"
+            )
+        if near_miss.get("blocked_vwap_only", 0) > near_miss.get("blocked_vol_only", 0):
+            hints.append(
+                "blocked_vwap_only 偏高 → 量能已枯竭(vol_dried_up)但價格未進 band；"
+                "考慮 entry_band_points"
+            )
+        if near_miss.get("blocked_vol_only", 0) > near_miss.get("blocked_vwap_only", 0):
+            hints.append(
+                "blocked_vol_only 偏高 → 價格已進 band 但 vol_1s 仍 > exhaustion_vol；"
+                "考慮 exhaustion_vol"
+            )
+        if near_miss.get("momentum_timeout", 0) > 0:
+            hints.append(
+                "momentum_timeout>0 → 180s 內未等到 pullback；策略設計偏嚴或波動太快"
+            )
+
+    entry_med = slippage.get("entry_median")
+    if entry_med is not None and entry_med > 2.0:
+        hints.append(
+            f"進場滑價中位數 {entry_med} 點 > 2 → 檢查流動性；勿輕易放大 ioc_slippage_points"
+        )
+    if cancel_rate is not None and cancel_rate > 0.20:
+        hints.append(
+            "開盤 IOC 取消率>20% → 預期內保護；維持 ioc_slippage_points，勿為成交率放大讓價"
+        )
+    if tick_type and tick_type.get("type0_pct", 0) > 40:
+        hints.append(
+            f"tick_type0 占比 {tick_type['type0_pct']}% 偏高 → buy/sell ratio 推斷品質可能失真"
+        )
+
+    for reason, stats in expectancy.items():
+        if stats["count"] >= 2 and stats["avg_pnl"] < 0:
+            hints.append(
+                f"exit_reason={reason} 平均 PnL {stats['avg_pnl']} 為負 → 檢查對應出場參數"
+            )
+
+    if daily_summaries:
+        last = daily_summaries[-1]
+        op = last.get("operational", {})
+        if op.get("lock_wait_over_50ms", 0) > 0:
+            hints.append(
+                f"lock_wait_over_50ms={op['lock_wait_over_50ms']} → 檢查 callback 熱路徑負載"
+            )
+        atr_min = op.get("atr_min")
+        params = last.get("params", {})
+        min_atr = params.get("min_atr_threshold")
+        if atr_min is not None and min_atr is not None and atr_min < min_atr:
+            hints.append(
+                f"當日 atr_min={atr_min} < min_atr_threshold={min_atr} → 可能整天無交易"
+            )
+
+    if not hints:
+        hints.append("無明顯調參警示；繼續累積樣本")
+    return hints
 
 
 def format_report(metrics: dict, *, quick_sl_sec: int = 5) -> str:
@@ -129,35 +411,125 @@ def format_report(metrics: dict, *, quick_sl_sec: int = 5) -> str:
     qsl_text = f"{qsl_rate:.1%}" if qsl_rate is not None else "N/A"
 
     lines = [
-        "=== UAT Report (P2-7) ===",
+        "=== UAT Report ===",
         f"動量觸發數:           {metrics['momentum_triggers']}",
         f"進場 signal 數:       {metrics['entry_signals']}",
         f"出場 signal 數:       {metrics['exit_signals']}",
+        f"成交回報 FILL 數:     {metrics['fill_count']}",
         f"動量→進場轉換率:      {conv_text}",
         f"完整 round-trip:      {metrics['completed_rounds']}",
         f"未平倉 round:         {metrics['open_rounds']}",
         (
-            f"秒停損 (<{quick_sl_sec}s, stop_loss): "
+            f"秒停損 (<{quick_sl_sec}s): "
             f"{metrics[f'quick_stop_loss_lt_{quick_sl_sec}s']} ({qsl_text})"
         ),
     ]
+
+    slip = metrics.get("slippage", {})
+    if slip.get("entry_count") or slip.get("exit_count"):
+        lines.append("滑價 (adverse pts vs signal):")
+        lines.append(
+            f"  進場 median={slip.get('entry_median')} p90={slip.get('entry_p90')} "
+            f"n={slip.get('entry_count')}"
+        )
+        lines.append(
+            f"  出場 median={slip.get('exit_median')} p90={slip.get('exit_p90')} "
+            f"n={slip.get('exit_count')}"
+        )
+
+    exp = metrics.get("expectancy_by_reason", {})
+    if exp:
+        lines.append("期望值 by exit_reason (點數):")
+        for reason, stats in sorted(exp.items()):
+            lines.append(
+                f"  {reason}: n={stats['count']} avg={stats['avg_pnl']} "
+                f"total={stats['total_pnl']}"
+            )
+
+    cancel = metrics.get("intent_cancelled", {})
+    if cancel.get("intent_cancelled"):
+        lines.append(
+            f"IOC 取消: total={cancel.get('intent_cancelled', 0)} "
+            f"開盤窗={cancel.get('intent_cancelled_open_session', 0)}"
+        )
+        ocr = metrics.get("open_session_cancel_rate")
+        if ocr is not None:
+            lines.append(f"  開盤取消率: {ocr:.1%}")
+
+    tick_type = metrics.get("tick_type")
+    if tick_type:
+        lines.append(
+            f"tick_type0 占比: {tick_type.get('type0_pct')}% "
+            f"(n={tick_type.get('total')})"
+        )
+
+    near_miss = metrics.get("near_miss")
+    if near_miss:
+        lines.append("Near-miss (pullback 未進場):")
+        lines.append(
+            f"  episodes={near_miss.get('momentum_episodes')} "
+            f"timeout={near_miss.get('momentum_timeout')} "
+            f"closest_vwap_dist={near_miss.get('closest_vwap_distance')}"
+        )
+        lines.append(
+            f"  blocked_vwap_only={near_miss.get('blocked_vwap_only')} "
+            f"blocked_vol_only={near_miss.get('blocked_vol_only')} "
+            f"blocked_both={near_miss.get('blocked_both')}"
+        )
 
     if metrics["exit_reasons"]:
         lines.append("出場 reason 分布:")
         for reason, count in sorted(metrics["exit_reasons"].items()):
             lines.append(f"  {reason or '(empty)'}: {count}")
 
+    hints = metrics.get("tuning_hints", [])
+    if hints:
+        lines.append("調參提示 (rule-based):")
+        for hint in hints:
+            lines.append(f"  - {hint}")
+
     return "\n".join(lines)
+
+
+def format_trend_report(summaries: list[dict]) -> str:
+    if not summaries:
+        return "無 DAILY_SUMMARY 行可分析"
+
+    lines = ["=== Multi-day Trend (DAILY_SUMMARY) ==="]
+    for s in summaries:
+        date = s.get("date", "?")
+        sig = s.get("signals", {})
+        fills = s.get("fills", {})
+        qsl = s.get("quick_stop_loss", {})
+        pnl = s.get("pnl", {})
+        conv = sig.get("momentum_to_entry_conversion")
+        conv_text = f"{conv:.1%}" if conv is not None else "N/A"
+        qsl_rate = qsl.get("rate")
+        qsl_text = f"{qsl_rate:.1%}" if qsl_rate is not None else "N/A"
+        lines.append(
+            f"{date} | conv={conv_text} | entries={sig.get('entry_signals')} | "
+            f"quick_sl={qsl_text} | pnl={pnl.get('daily_pnl_points')} | "
+            f"entry_slip_med={fills.get('entry_slippage_median')}"
+        )
+    return "\n".join(lines)
+
+
+def read_log_lines(paths: list[Path]) -> list[str]:
+    lines: list[str] = []
+    for path in paths:
+        lines.extend(path.read_text(encoding="utf-8", errors="replace").splitlines())
+    return lines
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Analyze theman log for UAT metrics (P2-7)."
+        description="Analyze theman log for UAT metrics."
     )
     parser.add_argument(
-        "log_file",
+        "log_files",
+        nargs="+",
         type=Path,
-        help="Strategy log file containing SIGNAL_AUDIT and MOMENTUM lines",
+        help="Strategy log file(s); multiple files merge for multi-day trend",
     )
     parser.add_argument(
         "--quick-sl-sec",
@@ -168,21 +540,41 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--json",
         action="store_true",
-        help="Output metrics as JSON instead of text report",
+        help="Output metrics as JSON",
+    )
+    parser.add_argument(
+        "--trend",
+        action="store_true",
+        help="Show multi-day trend from DAILY_SUMMARY lines only",
+    )
+    parser.add_argument(
+        "--summaries-only",
+        action="store_true",
+        help="Alias for --trend",
     )
     args = parser.parse_args(argv)
 
-    if not args.log_file.is_file():
-        print(f"找不到 log 檔: {args.log_file}", file=sys.stderr)
-        return 1
+    for path in args.log_files:
+        if not path.is_file():
+            print(f"找不到 log 檔: {path}", file=sys.stderr)
+            return 1
 
-    lines = args.log_file.read_text(encoding="utf-8", errors="replace").splitlines()
+    lines = read_log_lines(args.log_files)
+    summaries = parse_daily_summaries(lines)
+
+    if args.trend or args.summaries_only:
+        print(format_trend_report(summaries))
+        return 0
+
     metrics = compute_metrics(lines, quick_sl_sec=args.quick_sl_sec)
 
     if args.json:
         print(json.dumps(metrics, ensure_ascii=False, indent=2))
     else:
         print(format_report(metrics, quick_sl_sec=args.quick_sl_sec))
+        if len(summaries) > 1:
+            print()
+            print(format_trend_report(summaries))
 
     return 0
 

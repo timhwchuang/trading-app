@@ -20,6 +20,12 @@ from exchange_time import (
     is_trading_session as _is_trading_session,
     trading_day_for_daily_reset,
 )
+from observability import (
+    DailyObservability,
+    compute_limit_price,
+    format_daily_summary,
+    format_fill_audit,
+)
 from signal_audit import SignalAudit, format_signal_audit
 
 from config import (
@@ -179,6 +185,10 @@ class VWAPMomentumStrategy:
         self.pending_since = 0.0          # system time; relative pending timeout only
         self.pending_exchange_ts = 0
         self.pending_qty = 0
+        self.pending_signal_price = 0.0
+        self.pending_limit_price = 0.0
+        self.pending_exit_reason = ""
+        self.pending_ioc_slippage = IOC_SLIPPAGE_POINTS
         self._resynced_position = False   # sync_positions 後待首 tick 校準 trailing_peak
         self._api_connected = True
 
@@ -212,6 +222,7 @@ class VWAPMomentumStrategy:
         self._last_clock_skew_warn_wall = 0.0
         self._last_no_tick_resubscribe_wall = 0.0
         self._pending_intent_cancel_exchange_dt: Optional[datetime.datetime] = None
+        self._obs = DailyObservability()
 
     def _activate_ca(self) -> None:
         """P4-10: 先無 person_id；失敗則以 env / 帳號 person_id 重試。"""
@@ -400,7 +411,10 @@ class VWAPMomentumStrategy:
             )
 
         signal: Optional[OrderSignal] = None
+        lock_wait_start = time.perf_counter()
         with self.lock:
+            self._obs.record_lock_wait((time.perf_counter() - lock_wait_start) * 1000)
+            self._obs.record_atr(self.current_atr)
             self._maybe_refresh_atr(ts)
             self.update_vwap(ts, price, volume)
             self.update_momentum(ts, volume, tick_type)
@@ -415,6 +429,9 @@ class VWAPMomentumStrategy:
             if signal is not None:
                 if signal.intent == "entry":
                     self._pending_intent_cancel_exchange_dt = tick.datetime
+                    self._obs.record_entry_signal()
+                elif signal.intent == "exit":
+                    self._obs.record_exit_signal()
                 self._arm_pending(signal)
                 self._log_signal_audit(signal)
 
@@ -558,6 +575,7 @@ class VWAPMomentumStrategy:
         if now - self._last_no_tick_resubscribe_wall < 60:
             return
         self._last_no_tick_resubscribe_wall = now
+        self._obs.record_no_tick_resubscribe()
         logger.warning(
             "No-tick 看門狗 | %.0fs 無 tick，嘗試重訂閱 %s",
             silent,
@@ -575,6 +593,23 @@ class VWAPMomentumStrategy:
         self.pending_intent = signal.intent
         self.pending_exchange_ts = signal.exchange_ts
         self.pending_qty = signal.qty
+        self.pending_signal_price = signal.ref_price
+        self.pending_ioc_slippage = (
+            signal.slippage_points
+            if signal.slippage_points is not None
+            else IOC_SLIPPAGE_POINTS
+        )
+        is_buy = signal.action == "Buy"
+        self.pending_limit_price = compute_limit_price(
+            signal.ref_price,
+            is_buy=is_buy,
+            ioc_slippage=self.pending_ioc_slippage,
+        )
+        self.pending_exit_reason = (
+            signal.audit.reason
+            if signal.audit is not None and signal.intent == "exit"
+            else ""
+        )
         if signal.intent == "exit":
             self.exit_pending = True
 
@@ -703,13 +738,22 @@ class VWAPMomentumStrategy:
             self._trading_date,
             trade_date,
         )
+        self._emit_daily_summary(self._trading_date)
         self._reset_daily_state()
+        self._obs.reset()
+        self._tick_type_counts = {0: 0, 1: 0, 2: 0}
         self._trading_date = trade_date
 
     def _reset_daily_state(self) -> None:
         self.daily_pnl = 0.0
         self.block_new_entry = False
         self.consecutive_loss = 0
+
+    def _emit_daily_summary(self, trade_date: datetime.date) -> None:
+        self._obs.snapshot_tick_types(self._tick_type_counts)
+        self._obs.update_risk_state(self.daily_pnl, self.consecutive_loss)
+        summary = self._obs.build_summary(trade_date.isoformat())
+        logger.info("DAILY_SUMMARY %s", format_daily_summary(summary))
 
     def process_strategy(
         self, ts: int, price: float, dt: datetime.datetime
@@ -784,15 +828,23 @@ class VWAPMomentumStrategy:
 
         # Pullback 進場
         if ts - self.momentum_trigger_time > 180:
+            self._obs.record_momentum_timeout()
             self.reset_momentum()
             return None
 
         near_vwap = abs(price - self.current_vwap) <= ENTRY_BAND_POINTS
         exhausted = self.vol_1s <= EXHAUSTION_VOL
+        self._obs.record_pullback_tick(
+            price,
+            self.current_vwap,
+            near_vwap=near_vwap,
+            vol_dried_up=exhausted,
+        )
 
         if not (near_vwap and exhausted):
             return None
 
+        self._obs.record_momentum_entry()
         if self.momentum_dir == "Long":
             return OrderSignal(
                 "Buy",
@@ -816,6 +868,7 @@ class VWAPMomentumStrategy:
         self.momentum_dir = direction
         self.momentum_peak = price
         self.momentum_trigger_time = ts
+        self._obs.record_momentum_trigger()
         logger.info("MOMENTUM %s 突破 | 價格 %.1f", direction, price)
 
     def reset_momentum(self):
@@ -1056,6 +1109,7 @@ class VWAPMomentumStrategy:
                         )
                     ):
                         tag = "intent_cancelled_open_session"
+                    self._obs.record_intent_cancelled(tag)
                     logger.info(
                         "委託未成交/已取消，重置 pending | tag=%s",
                         tag,
@@ -1109,12 +1163,26 @@ class VWAPMomentumStrategy:
             return True
 
         intent = self.pending_intent
+        order_id = self.pending_order_id or ""
+        direction = "Buy" if is_buy else "Sell"
         if intent == "entry":
             self.has_position = True
             self.entry_price = price
             self.position_dir = "Long" if is_buy else "Short"
             self.trailing_peak = price
             self._begin_entry_tracking(self.pending_exchange_ts)
+            fill_audit = self._obs.record_fill(
+                intent="entry",
+                direction=direction,
+                signal_price=self.pending_signal_price,
+                fill_price=price,
+                is_buy=is_buy,
+                limit_price=self.pending_limit_price,
+                order_id=order_id,
+                ts=self.pending_exchange_ts,
+                ioc_slippage_allowed=self.pending_ioc_slippage,
+            )
+            logger.info("FILL_AUDIT %s", format_fill_audit(fill_audit))
             self.reset_momentum()
             self._clear_pending()
             logger.info("進場完成 | %s %d口 @ %.1f", self.position_dir, deal_qty, price)
@@ -1126,11 +1194,32 @@ class VWAPMomentumStrategy:
             else:
                 pnl = self.entry_price - price
 
+            hold_sec = 0
+            if self.entry_exchange_ts > 0:
+                hold_sec = max(0, self.pending_exchange_ts - self.entry_exchange_ts)
+
             self.daily_pnl += pnl
             if pnl < 0:
                 self.consecutive_loss += 1
             else:
                 self.consecutive_loss = 0
+
+            fill_audit = self._obs.record_fill(
+                intent="exit",
+                direction=direction,
+                signal_price=self.pending_signal_price,
+                fill_price=price,
+                is_buy=is_buy,
+                limit_price=self.pending_limit_price,
+                order_id=order_id,
+                ts=self.pending_exchange_ts,
+                ioc_slippage_allowed=self.pending_ioc_slippage,
+                exit_reason=self.pending_exit_reason,
+                pnl_points=pnl,
+                hold_sec=hold_sec,
+            )
+            self._obs.update_risk_state(self.daily_pnl, self.consecutive_loss)
+            logger.info("FILL_AUDIT %s", format_fill_audit(fill_audit))
 
             self.has_position = False
             self.position_dir = "Flat"
@@ -1277,6 +1366,10 @@ class VWAPMomentumStrategy:
         self.pending_since = 0.0
         self.pending_exchange_ts = 0
         self.pending_qty = 0
+        self.pending_signal_price = 0.0
+        self.pending_limit_price = 0.0
+        self.pending_exit_reason = ""
+        self.pending_ioc_slippage = IOC_SLIPPAGE_POINTS
 
     def handle_session_event(
         self, resp_code: int, event_code: int, info: str, event: str
@@ -1352,6 +1445,8 @@ class VWAPMomentumStrategy:
             logger.info("策略手動停止")
         finally:
             self._running = False
+            if self._trading_date is not None:
+                self._emit_daily_summary(self._trading_date)
             self.api.logout()
             shutdown_async_logging()
 

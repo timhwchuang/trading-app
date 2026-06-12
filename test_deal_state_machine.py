@@ -6,17 +6,13 @@ import unittest
 
 from shioaji import OrderState
 
-from test_helpers import make_strategy
+from test_helpers import arm_pending_entry, arm_pending_exit, make_strategy
 
 
 class TestDealStateMachine(unittest.TestCase):
     def test_entry_deal_updates_position(self):
         strategy = make_strategy()
-        strategy.is_pending = True
-        strategy.pending_intent = "entry"
-        strategy.pending_order_id = "ord-entry-1"
-        strategy.pending_qty = 1
-        strategy.pending_exchange_ts = 1000
+        arm_pending_entry(strategy, exchange_ts=1000)
 
         msg = {
             "price": "18000",
@@ -35,10 +31,7 @@ class TestDealStateMachine(unittest.TestCase):
 
     def test_wrong_order_id_ignored(self):
         strategy = make_strategy()
-        strategy.is_pending = True
-        strategy.pending_intent = "entry"
-        strategy.pending_order_id = "ord-a"
-        strategy.pending_qty = 1
+        arm_pending_entry(strategy, order_id="ord-a")
 
         msg = {
             "price": "18000",
@@ -53,11 +46,7 @@ class TestDealStateMachine(unittest.TestCase):
 
     def test_exit_deal_clears_position_and_updates_pnl(self):
         strategy = make_strategy()
-        strategy.is_pending = True
-        strategy.pending_intent = "exit"
-        strategy.pending_order_id = "ord-exit-1"
-        strategy.pending_qty = 1
-        strategy.pending_exchange_ts = 2000
+        arm_pending_exit(strategy, exchange_ts=2000, exit_reason="take_profit")
         strategy.has_position = True
         strategy.position_dir = "Long"
         strategy.entry_price = 18000.0
