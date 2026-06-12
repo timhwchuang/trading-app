@@ -2,7 +2,7 @@
 
 > **目標執行環境：Windows**（本專案以 Windows 桌面 / 伺服器為主要部署平台開發與 UAT。）
 
-台指期 VWAP 動量策略，透過 [Shioaji](https://sinotrade.github.io/) 連接永豐金 API。參數見 `config.yaml`，密鑰僅走環境變數。
+台指期 VWAP 動量策略，透過 [Shioaji](https://sinotrade.github.io/) 連接永豐金 API。參數見 `config/config.yaml`，密鑰僅走環境變數。
 
 ---
 
@@ -54,7 +54,7 @@ $env:SJ_CA_PATH = "C:\certs\Sinopac.pfx"
 $env:SJ_CA_PASSWD = "your_ca_password"
 
 # 可選：覆寫設定檔與日誌
-$env:CONFIG_PATH = "C:\theman\config.yaml"
+$env:CONFIG_PATH = "C:\theman\config\config.yaml"
 $env:LOG_FILE = "C:\logs\theman.log"
 $env:LOG_LEVEL = "INFO"
 ```
@@ -67,21 +67,22 @@ $env:LOG_LEVEL = "INFO"
 
 ```powershell
 .\.venv\Scripts\activate
-python man.py
+$env:PYTHONPATH = "src"
+python src\man.py
 ```
 
-首次請確認 `config.yaml` 中 `simulation: true`，通過 UAT 後再改為 `false`。
+首次請確認 `config/config.yaml` 中 `simulation: true`，通過 UAT 後再改為 `false`。
 
 ---
 
 ## 設定檔
 
-| 檔案          | 說明                                             |
-| ------------- | ------------------------------------------------ |
-| `config.yaml` | 策略參數、交易時段、開盤量能階梯（**不含密鑰**） |
-| `config.py`   | YAML 載入器；`man.py` 啟動時自動讀取             |
+| 檔案                    | 說明                                             |
+| ----------------------- | ------------------------------------------------ |
+| `config/config.yaml`    | 策略參數、交易時段、開盤量能階梯（**不含密鑰**） |
+| `src/config.py`         | YAML 載入器；`man.py` 啟動時自動讀取             |
 
-修改參數後**重啟程式**即可，無需改 `man.py`。
+修改參數後**重啟程式**即可，無需改 `src/man.py`。
 
 ---
 
@@ -101,10 +102,25 @@ python man.py
 
 ## 專案文件
 
-| 檔案                               | 內容                                       |
-| ---------------------------------- | ------------------------------------------ |
-| [`TODO.md`](TODO.md)               | 開發路線圖、實戰踩坑、UAT / Pilot 檢查清單 |
-| [`UATReminder.md`](UATReminder.md) | Phase 0 驗收步驟與 log 證據                |
+| 檔案                                           | 內容                                       |
+| ---------------------------------------------- | ------------------------------------------ |
+| [`TODO.md`](TODO.md)                           | 開發路線圖、實戰踩坑、UAT / Pilot 檢查清單 |
+| [`docs/UATReminder.md`](docs/UATReminder.md)   | Phase 0 驗收步驟與 log 證據                |
+
+## 專案結構
+
+```
+.
+├── config/          # 設定檔（config.yaml）
+├── docs/            # 設計、UAT、Code Review 文件
+├── src/             # 核心源碼（策略、回測、工具）
+├── tests/           # 單元測試
+├── README.md
+├── TODO.md
+└── requirements.txt
+```
+
+測試：`python run_tests.py`
 
 ---
 

@@ -1,9 +1,9 @@
 # UAT 驗收提醒
 
-> **執行環境：Windows**（PowerShell 啟動，見 [`README.md`](README.md)）。
+> **執行環境：Windows**（PowerShell 啟動，見 [`README.md`](../README.md)）。
 > 通過標準：**每項有 log 證據 + 人工對帳一致**。驗的是狀態機，不是有沒有賺錢。
 >
-> 完整清單見 [`TODO.md`](TODO.md) Phase 3。以下按實作項目整理驗收要點。
+> 完整清單見 [`TODO.md`](../TODO.md) Phase 3。以下按實作項目整理驗收要點。
 
 ---
 
@@ -17,10 +17,11 @@ $env:SJ_SEC_KEY = "your_secret_key"
 $env:LOG_FILE = "C:\logs\theman-uat.log"   # 建議開啟（P4-2 每日輪替）
 # UAT 第一天：驗證委託回報欄位
 $env:DUMP_ORDER_EVENTS = "1"
-python man.py
+$env:PYTHONPATH = "src"
+python src\man.py
 ```
 
-- [ ] `config.yaml` 中 `simulation: true`
+- [ ] `config/config.yaml` 中 `simulation: true`
 - [ ] 系統時區為台北 (UTC+8)
 - [ ] log 出現 `VWAP Momentum 策略已啟動` 與 `ATR(...) 更新`
 - [ ] log 出現 `API usage [login]`（P4-9 流量基線）
@@ -176,6 +177,6 @@ signal 產生後、下單前已在 lock 內設 `is_pending`，開盤高頻 tick 
 模擬 UAT 全過後，申請 CA 憑證完成再進 Pilot：
 
 1. 設定 `SJ_CA_PATH` / `SJ_CA_PASSWD`
-2. `config.yaml` → `simulation: false`
+2. `config/config.yaml` → `simulation: false`
 3. 固定 **1 口**，連續 2-4 週只觀察不調參
 4. 重點審計 08:45-09:15 滑價與 `intent_cancelled` 率

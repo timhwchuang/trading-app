@@ -11,17 +11,17 @@
 | Phase 0 Blocker | ✅ P0-1～P0-10 完成（P0-9 用 `DUMP_ORDER_EVENTS=1` 啟用） |
 | Phase 1 訊號品質 | ✅ P1-1 / P1-2 / P1-5 / **P1-6 保護期** 完成；P1-3 UAT 觀測；P1-4 / P1-7 可選 |
 | Phase 2 狀態機 | ✅ P2-3/4/5/6/7/8 完成；P2-2 核心；P2-1 待補（qty>1） |
-| **Phase 3 UAT** | **▶ 可開跑** — 見 [`UATReminder.md`](UATReminder.md) |
+| **Phase 3 UAT** | **▶ 可開跑** — 見 [`docs/UATReminder.md`](docs/UATReminder.md) |
 | Phase 4 運維 | P4-1/2/5/6/8/9/10 完成；P4-3/4 Pilot 前 |
 | Phase 5 Pilot | 待 UAT 全過 + CA 憑證；**秒停損率（P2-7）為硬指標** |
 
-單元測試：`test_*`（mock API，見 P2-8 `test_helpers.make_strategy`）
+單元測試：`tests/test_*`（`python run_tests.py`；mock API，見 P2-8 `test_helpers.make_strategy`）
 
 ---
 
 ## 外部 Code Review #1 — 評估摘要
 
-> 完整原文：[`CodeReview#1.md`](CodeReview%231.md)（2026-06-10）
+> 完整原文：[`docs/CodeReview#1.md`](docs/CodeReview%231.md)（2026-06-10）
 
 ### 整體結論：可上線體質，工程面已防住多數實戰翻車點
 
@@ -328,7 +328,7 @@
     - **持倉後 trailing peak**（出場用，僅在 manage_exit 內更新或獨立變數）
 
 - [x] **P2-6 Shioaji Callback 執行緒安全守則**
-  - 已落地：[`CALLBACK_GUARDRAILS.md`](CALLBACK_GUARDRAILS.md)
+  - 已落地：[`docs/CALLBACK_GUARDRAILS.md`](docs/CALLBACK_GUARDRAILS.md)
 
 - [x] **P2-7 秒停損率量化（UAT / Pilot 硬指標）**
   - 已落地：`uat_report.py` 解析 log 中 `SIGNAL_AUDIT` + `MOMENTUM` 行。
@@ -343,7 +343,7 @@
 
 ## Phase 3 — UAT 測試清單
 
-> **開發端 blocker 已清除，可開始模擬 UAT。** 驗收步驟見 [`UATReminder.md`](UATReminder.md)。
+> **開發端 blocker 已清除，可開始模擬 UAT。** 驗收步驟見 [`docs/UATReminder.md`](docs/UATReminder.md)。
 
 UAT 通過標準：**每項有 log 證據 + 人工對帳一致**。
 
@@ -524,7 +524,7 @@ UAT 後可選：P1-4、P2-1 部分成交、P2-2 lock 範圍縮小、P4-3 告警
 
 ## 參數待校準（UAT 期間記錄）
 
-> 現值來自 [`config.yaml`](config.yaml)；UAT 期間依實際市況調整後記錄於此。
+> 現值來自 [`config/config.yaml`](config/config.yaml)；UAT 期間依實際市況調整後記錄於此。
 
 | 參數                      | 現值   | 備註                                              |
 | ------------------------- | ------ | ------------------------------------------------- |
@@ -582,5 +582,5 @@ UAT 後可選：P1-4、P2-1 部分成交、P2-2 lock 範圍縮小、P4-3 告警
 | 2026-06-10 | P1-6 進場保護期停損解耦（grace ticks/sec + hard/vwap 分離） |
 | 2026-06-10 | P4-9 kbars 當日抓取 + `api.usage()`；P2-7 `uat_report.py` |
 | 2026-06-10 | P0-9 `DUMP_ORDER_EVENTS` + P0-10 `_require_futopt_account` 落地 |
-| 2026-06-10 | 整合 [Code Review #1](CodeReview%231.md)：P0-9/10、P1-6/7、P2-7/8、P4-8/9/10、坑十 VWAP 停損 |
+| 2026-06-10 | 整合 [Code Review #1](docs/CodeReview%231.md)：P0-9/10、P1-6/7、P2-7/8、P4-8/9/10、坑十 VWAP 停損 |
 | 2026-06-10 | P0-3 peak 首 tick 校準；P0-8 trading_day 文件化；P2-1 部分成交防禦；P4-1 重連同步 |

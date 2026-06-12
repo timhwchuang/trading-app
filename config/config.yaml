@@ -10,7 +10,7 @@
 #   $env:SJ_CA_PASSWD = "your_ca_password"
 #
 # 可選覆寫：
-#   $env:CONFIG_PATH = "C:\theman\config.yaml"
+#   $env:CONFIG_PATH = "C:\theman\config\config.yaml"
 #   $env:LOG_LEVEL = "DEBUG"
 #   $env:LOG_FILE = "C:\logs\theman.log"
 

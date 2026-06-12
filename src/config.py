@@ -10,8 +10,8 @@ from typing import Any, Mapping
 
 import yaml
 
-_CONFIG_DIR = Path(__file__).resolve().parent
-DEFAULT_CONFIG_PATH = _CONFIG_DIR / "config.yaml"
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_CONFIG_PATH = _PROJECT_ROOT / "config" / "config.yaml"
 
 
 def _parse_time(value: str) -> datetime.time:
