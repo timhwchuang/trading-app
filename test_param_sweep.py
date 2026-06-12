@@ -10,8 +10,15 @@ from unittest.mock import MagicMock, patch
 
 import config
 import man
+import observability
 from data_loader import ReplayTick
-from param_sweep import _apply_params, _restore_params, sweep, valid_score
+from observability import build_config_snapshot
+from param_sweep import (
+    _apply_params,
+    _restore_params,
+    _run_backtest_summaries,
+    sweep,
+)
 from man import VWAPMomentumStrategy
 
 
@@ -49,10 +56,38 @@ class TestParamSweep(unittest.TestCase):
     def test_config_restored(self):
         original_man = man.ENTRY_BAND_POINTS
         original_cfg = config.ENTRY_BAND_POINTS
+        original_obs = observability.ENTRY_BAND_POINTS
         saved = _apply_params({"ENTRY_BAND_POINTS": 99.0})
         _restore_params(saved)
         self.assertEqual(man.ENTRY_BAND_POINTS, original_man)
         self.assertEqual(config.ENTRY_BAND_POINTS, original_cfg)
+        self.assertEqual(observability.ENTRY_BAND_POINTS, original_obs)
+
+    def test_daily_summary_params_match_sweep(self):
+        ticks = [
+            ReplayTick(datetime.datetime(2026, 6, 12, 9, 0, 0), "18000", 1, 1),
+        ]
+
+        def fake_replay(_code, _dates, cache_dir=None):
+            yield from ticks
+
+        saved = _apply_params({"ENTRY_BAND_POINTS": 42.0})
+        try:
+            self.assertEqual(build_config_snapshot()["entry_band_points"], 42.0)
+            with tempfile.TemporaryDirectory() as tmp:
+                cache_dir = Path(tmp)
+                with patch("backtester.iter_replay_ticks", fake_replay):
+                    summaries = _run_backtest_summaries(
+                        "TXFR1",
+                        [datetime.date(2026, 6, 12)],
+                        cache_dir,
+                    )
+            self.assertEqual(
+                summaries[-1]["params"]["entry_band_points"],
+                42.0,
+            )
+        finally:
+            _restore_params(saved)
 
     def test_man_namespace_patched(self):
         original = man.ENTRY_BAND_POINTS

@@ -10,11 +10,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from data_loader import ReplayTick
+from config import MIN_ATR_THRESHOLD
+from data_loader import KBarRecord, ReplayTick, kbars_cache_path, save_kbars_csv
 from determinism_check import (
     canonical_audit_json,
     capture_backtest_log_lines,
     hash_audit_lines,
+    hash_audit_records,
     run_hash,
 )
 from man import OrderSignal, VWAPMomentumStrategy
@@ -43,6 +45,40 @@ def _patched_entry_process(original):
         )
 
     return process
+
+
+def _patched_entry_when_atr_ready(original):
+    def process(self, ts, price, dt):
+        if self.has_position or self.is_pending:
+            return original(self, ts, price, dt)
+        if self.current_atr < MIN_ATR_THRESHOLD:
+            return None
+        return OrderSignal(
+            "Buy",
+            1,
+            price,
+            "entry",
+            exchange_ts=ts,
+            audit=self._build_entry_audit(dt, price, ts, "Buy"),
+        )
+
+    return process
+
+
+def _seed_kbars_cache(cache_dir: Path, code: str = "TXFR1") -> None:
+    prev = datetime.date(2026, 6, 11)
+    bars = [
+        KBarRecord(
+            datetime.datetime(2026, 6, 11, 13, 30) + datetime.timedelta(minutes=i),
+            18000 + i,
+            18020 + i,
+            17980 + i,
+            18010 + i,
+            50,
+        )
+        for i in range(25)
+    ]
+    save_kbars_csv(bars, kbars_cache_path(cache_dir, code, prev))
 
 
 class TestDeterminism(unittest.TestCase):
@@ -126,6 +162,65 @@ class TestDeterminism(unittest.TestCase):
             hash_audit_lines([forward]),
             hash_audit_lines([reversed_keys]),
         )
+
+    def test_hash_ignores_operational_wall_clock(self):
+        base = {
+            "date": "2026-06-12",
+            "operational": {
+                "lock_wait_max_ms": 0.001,
+                "intent_cancelled": 0,
+            },
+        }
+        mutated = {
+            "date": "2026-06-12",
+            "operational": {
+                "lock_wait_max_ms": 99.0,
+                "intent_cancelled": 0,
+            },
+        }
+        h_base = hash_audit_records(
+            [("DAILY_SUMMARY", json.dumps(base, ensure_ascii=False))]
+        )
+        h_mutated = hash_audit_records(
+            [("DAILY_SUMMARY", json.dumps(mutated, ensure_ascii=False))]
+        )
+        self.assertEqual(h_base, h_mutated)
+
+    def test_three_runs_same_hash_with_kbars_and_fills(self):
+        base = datetime.datetime(2026, 6, 12, 9, 0, 0)
+        ticks = [
+            ReplayTick(base, "18000", 1, 1),
+            ReplayTick(base.replace(second=1), "18000", 1, 1),
+        ]
+        date = datetime.date(2026, 6, 12)
+
+        def fake_replay(_code, _dates, cache_dir=None):
+            yield from ticks
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_dir = Path(tmp)
+            _seed_kbars_cache(cache_dir)
+            with patch("backtester.iter_replay_ticks", fake_replay):
+                with patch.object(
+                    VWAPMomentumStrategy,
+                    "process_strategy",
+                    _patched_entry_when_atr_ready(
+                        VWAPMomentumStrategy.process_strategy
+                    ),
+                ):
+                    hashes = [
+                        run_hash("TXFR1", [date], cache_dir=cache_dir)
+                        for _ in range(3)
+                    ]
+                    captured = capture_backtest_log_lines(
+                        "TXFR1", [date], cache_dir=cache_dir
+                    )
+        self.assertEqual(hashes[0], hashes[1])
+        self.assertEqual(hashes[1], hashes[2])
+        fill_lines = [line for line in captured if "FILL_AUDIT" in line]
+        self.assertGreater(len(fill_lines), 0)
+        metrics = compute_metrics(captured)
+        self.assertGreater(metrics["fill_count"], 0)
 
 
 if __name__ == "__main__":

@@ -78,6 +78,51 @@ class TestBacktestEngine(unittest.TestCase):
         self.assertEqual(len(seen), 1)
         self.assertEqual(seen[0].time(), datetime.time(8, 46))
 
+    def test_premarket_tick_still_runs_matching(self):
+        import shioaji as sj
+        from shioaji import OrderState
+
+        session_tick = ReplayTick(
+            datetime.datetime(2026, 6, 12, 9, 0, 0), "18000", 1, 1
+        )
+        premarket_tick = ReplayTick(
+            datetime.datetime(2026, 6, 12, 8, 50, 0), "18000", 1, 1
+        )
+        engine = BacktestEngine("TXFR1", [datetime.date(2026, 6, 12)])
+        engine.broker.latency_ms = 0
+        contract = engine.broker.resolve_contract("TXFR1")
+        order = sj.FuturesOrder(
+            action=sj.Action.Buy,
+            price=18003,
+            quantity=1,
+            price_type=sj.FuturesPriceType.LMT,
+            order_type=sj.OrderType.IOC,
+            octype=sj.FuturesOCType.Auto,
+            account=None,
+        )
+        trade = engine.broker.place_order(contract, order)
+        engine.strategy.pending_order_id = str(trade.order.id)
+        engine.strategy.pending_intent = "entry"
+        engine.strategy.is_pending = True
+        events: list[tuple] = []
+        original = engine.strategy.handle_order_event
+
+        def capture(stat, msg):
+            events.append((stat, msg))
+            return original(stat, msg)
+
+        engine.strategy.handle_order_event = capture
+
+        def fake_replay(_code, _dates, cache_dir=None):
+            yield session_tick
+            yield premarket_tick
+
+        with patch("backtester.iter_replay_ticks", fake_replay):
+            engine.run()
+
+        deals = [e for e in events if e[0] == OrderState.FuturesDeal]
+        self.assertEqual(len(deals), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

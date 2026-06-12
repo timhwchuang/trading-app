@@ -73,6 +73,9 @@ class MockBroker:
     def order_deal_records(self) -> list:
         return []
 
+    def usage(self) -> SimpleNamespace:
+        return SimpleNamespace(bytes=0, limit_bytes=0, remaining_bytes=0, connections=0)
+
     def kbars(self, contract: Any, start: str, end: str) -> _KBars:
         code = getattr(contract, "code", str(contract))
         start_date = datetime.date.fromisoformat(start)

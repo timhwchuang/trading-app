@@ -10,6 +10,7 @@ from typing import Any
 
 import config
 import man
+import observability
 from backtester import BacktestEngine
 from data_loader import DEFAULT_CACHE_DIR
 from determinism_check import _AuditCaptureHandler
@@ -27,19 +28,25 @@ _PATCH_TARGETS = (
 )
 
 
-def _apply_params(params: dict[str, Any]) -> dict[str, tuple[Any, Any]]:
-    saved: dict[str, tuple[Any, Any]] = {}
+def _apply_params(params: dict[str, Any]) -> dict[str, tuple[Any, Any, Any]]:
+    saved: dict[str, tuple[Any, Any, Any]] = {}
     for k, v in params.items():
-        saved[k] = (getattr(man, k, None), getattr(config, k, None))
+        saved[k] = (
+            getattr(man, k, None),
+            getattr(config, k, None),
+            getattr(observability, k, None),
+        )
         setattr(man, k, v)
         setattr(config, k, v)
+        setattr(observability, k, v)
     return saved
 
 
-def _restore_params(saved: dict[str, tuple[Any, Any]]) -> None:
-    for k, (mv, cv) in saved.items():
+def _restore_params(saved: dict[str, tuple[Any, Any, Any]]) -> None:
+    for k, (mv, cv, ov) in saved.items():
         setattr(man, k, mv)
         setattr(config, k, cv)
+        setattr(observability, k, ov)
 
 
 def _run_backtest_summaries(
@@ -75,15 +82,18 @@ def _aggregate_kpi(summaries: list[dict[str, Any]]) -> dict[str, Any]:
     total_pnl = sum(
         float(s.get("pnl", {}).get("daily_pnl_points", 0.0)) for s in summaries
     )
-    rates = [
-        s.get("quick_stop_loss", {}).get("rate")
-        for s in summaries
-        if s.get("quick_stop_loss", {}).get("rate") is not None
-    ]
-    avg_rate = sum(rates) / len(rates) if rates else None
+    total_quick_sl = sum(
+        int(s.get("quick_stop_loss", {}).get("count", 0) or 0) for s in summaries
+    )
+    total_exits = sum(
+        int(s.get("fills", {}).get("exit_count", 0) or 0) for s in summaries
+    )
+    weighted_rate = (
+        total_quick_sl / total_exits if total_exits > 0 else None
+    )
     return {
         "daily_pnl_points": round(total_pnl, 2),
-        "quick_stop_loss_rate": avg_rate,
+        "quick_stop_loss_rate": weighted_rate,
         "day_count": len(summaries),
     }
 
