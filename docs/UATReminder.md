@@ -15,11 +15,13 @@ cd C:\path\to\theman
 $env:SJ_API_KEY = "your_api_key"
 $env:SJ_SEC_KEY = "your_secret_key"
 $env:LOG_FILE = "C:\logs\theman-uat.log"   # 建議開啟（P4-2 每日輪替）
-# UAT 第一天：驗證委託回報欄位
+# UAT 第一天：tick 落盤（P0-11，hard gate）+ 委託回報欄位
+$env:TICK_ARCHIVE = "1"
 $env:DUMP_ORDER_EVENTS = "1"
 python src\man.py
 ```
 
+- [ ] **P0-11** 已實作且 `TICK_ARCHIVE=1` 盤中寫入 `tick_cache/*.csv`；收盤後 rotate 或排程器產出 `*.csv.gz`
 - [ ] `config/config.yaml` 中 `simulation: true`
 - [ ] 系統時區為台北 (UTC+8)
 - [ ] log 出現 `VWAP Momentum 策略已啟動` 與 `ATR(...) 更新`
@@ -27,9 +29,10 @@ python src\man.py
 
 ### UAT 第一天（必做）
 
-1. `DUMP_ORDER_EVENTS=1` 跑一筆委託/成交 → 搜尋 `RAW_ORDER_EVT` 確認欄位名（P0-9）
-2. 確認啟動無 `無期貨帳號` 錯誤（P0-10）
-3. 收盤後：`python src\uat_report.py C:\logs\theman-uat.log`（P2-7）
+1. `TICK_ARCHIVE=1` 跑滿交易時段 → 盤中確認 `.csv`；收盤後 rotate / 排程器 → 確認 `.csv.gz` 可重放（P0-11）
+2. `DUMP_ORDER_EVENTS=1` 跑一筆委託/成交 → 搜尋 `RAW_ORDER_EVT` 確認欄位名（P0-9）
+3. 確認啟動無 `無期貨帳號` 錯誤（P0-10）
+4. 收盤後：`python src\uat_report.py C:\logs\theman-uat.log`（P2-7）
 
 ---
 

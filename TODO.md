@@ -4,14 +4,14 @@
 > **目標執行環境：Windows**（開發、UAT、Pilot 皆以 Windows 為準；見 [`README.md`](README.md)）。
 > 原則：**UAT 驗的是狀態機與對帳，不是看有沒有賺錢。**
 
-### 目前狀態（2026-06-10）
+### 目前狀態（2026-06-12）
 
 | 階段 | 狀態 |
 | ---- | ---- |
-| Phase 0 Blocker | ✅ P0-1～P0-10 完成（P0-9 用 `DUMP_ORDER_EVENTS=1` 啟用） |
+| Phase 0 Blocker | P0-1～P0-10 ✅；**🔴 P0-11 UAT tick 落盤（未實作，UAT hard gate）** |
 | Phase 1 訊號品質 | ✅ P1-1 / P1-2 / P1-5 / **P1-6 保護期** 完成；P1-3 UAT 觀測；P1-4 / P1-7 可選 |
 | Phase 2 狀態機 | ✅ P2-3/4/5/6/7/8 完成；P2-2 核心；P2-1 待補（qty>1） |
-| **Phase 3 UAT** | **▶ 可開跑** — 見 [`docs/UATReminder.md`](docs/UATReminder.md) |
+| **Phase 3 UAT** | **⏸ 待 P0-11** — 見 [`docs/UATReminder.md`](docs/UATReminder.md)、[`docs/WeeklyStatus.md`](docs/WeeklyStatus.md) |
 | Phase 4 運維 | P4-1/2/5/6/8/9/10 完成；P4-3/4 Pilot 前 |
 | Phase 5 Pilot | 待 UAT 全過 + CA 憑證；**秒停損率（P2-7）為硬指標** |
 
@@ -244,6 +244,28 @@
   - 已落地：`login()` 後 `_require_futopt_account()`，無期貨戶即 `RuntimeError`。
   - 驗收：無期貨戶登入 → 啟動即失敗；有期貨戶 → 正常對帳
 
+- [ ] **P0-11 UAT 盤中非同步 tick 落盤** — **UAT hard gate（未實作不得開 UAT）**
+  - 背景：決策**不再**用 API 批量下載過往 tick；改在 UAT 模擬盤中累積推播 tick → `tick_cache/`，作為日後回測樣本（見 [`docs/WeeklyStatus.md`](docs/WeeklyStatus.md)）。
+  - 問題：策略已訂閱 tick 推播，但未落地；UAT 開跑卻不存檔 → 無法累積回測資料，且錯過唯一低成本取樣窗口。
+  - 原則（[`CALLBACK_GUARDRAILS.md`](docs/CALLBACK_GUARDRAILS.md)）：**禁止**在 `on_tick` 內同步磁碟 I/O；與 **P0-7** 同構——callback 僅 `put_nowait` 入隊，背景執行緒負責寫檔。
+  - 方案：
+    - `on_tick`：在 `with self.lock` **之前**複製 `datetime/close/volume/tick_type/bid/ask` → 非阻塞 queue
+    - 背景 `TickArchiver`：盤中**只 append plain** `.csv`（欄位與 `data_loader.save_ticks_csv` 同構）
+      - 路徑：`tick_cache/{product_code}_{YYYY-MM-DD}.csv`
+      - 批次 flush（例如每 500 筆或每 2s）；**盤中不做 gzip**（crash 時逐行可讀、不拖 trading CPU）
+    - **gzip 與落盤分離**（二擇一或並用，與 P4-2 log rotate 同哲學）：
+      - **A) Rotate（建議內建）**：跨日換檔或 `shutdown` 時，背景執行緒對**已關閉**的昨日 `.csv` → `gzip` → `.csv.gz` 並刪除原檔；當日檔維持 plain 直到收盤
+      - **B) 排程器（建議並用）**：`src/compress_tick_cache.py`（或同級腳本）掃 `tick_cache/*.csv`（排除當日進行中檔）→ 壓成 `.csv.gz`；Windows **工作排程器**每日 15:30 / 16:00 執行（補 crash 未 rotate 的檔）
+      - `data_loader`：`load_ticks_csv` / `iter_replay_ticks` **同時支援** `.csv.gz` 與 `.csv`（優先 `.gz`）
+    - 跨日自動換檔；程序結束 `atexit` / `shutdown` 時 drain queue、flush 當日 `.csv`，並觸發 A) rotate
+    - UAT 啟用：`TICK_ARCHIVE=1`（env）；queue 滿則丟棄並計數，**絕不阻塞** callback
+    - 選配（建議同輪）：kbars 同策略 — 盤中 plain `{code}_kbars_{date}.csv`，rotate / 排程器 gzip
+  - 驗收：
+    - `TICK_ARCHIVE=1` 跑滿交易時段 → 當日 `.csv` 可讀；收盤後 rotate 或排程器執行後 → `.csv.gz` 可 `iter_replay_ticks`
+    - 關閉進程後檔案完整、無截斷列
+    - 開盤高頻區間策略行為與未啟用時一致（落盤不得拖慢 `on_tick`）
+  - 測試：archiver 單元測試（入隊、換日、shutdown flush、rotate→gzip）；`compress_tick_cache` 單元測試；不依賴真 API
+
 ---
 
 ## Phase 1 — 資料與訊號品質
@@ -343,12 +365,13 @@
 
 ## Phase 3 — UAT 測試清單
 
-> **開發端 blocker 已清除，可開始模擬 UAT。** 驗收步驟見 [`docs/UATReminder.md`](docs/UATReminder.md)。
+> **開發端 blocker：P0-11（UAT tick 落盤）未完成前不得開 UAT。** 驗收步驟見 [`docs/UATReminder.md`](docs/UATReminder.md)。
 
 UAT 通過標準：**每項有 log 證據 + 人工對帳一致**。
 
 ### 3.0 UAT 第一天（Review #1 最小檢查清單）
 
+- [ ] **P0-11** 設 `TICK_ARCHIVE=1`，確認當日 `.csv` 落盤；rotate / 排程器後 `.csv.gz` 可 `iter_replay_ticks` 重放
 - [ ] **P0-9** 設 `DUMP_ORDER_EVENTS=1`，跑一筆委託/成交 → 依 `RAW_ORDER_EVT` 確認欄位名
 - [x] **P0-10** `futopt_account` 啟動時檢查（已落地）
 - [x] **P4-9** `api.usage()` 於 login / atr_refresh log；盤中 ATR 改抓當日 K（已落地）
@@ -508,15 +531,16 @@ UAT 通過標準：**每項有 log 證據 + 人工對帳一致**。
 ✅ P2-2 核心（_arm_pending 防雙單）
 ✅ P2-3 收盤平倉 + test_session_flatten
 ✅ P4-5 config.yaml 外部化
-→ 🔄 Phase 3 UAT（模擬環境，simulation: true）  ← 目前在這
-  → UAT Day 1：P0-9 dump 回報、P0-10 futopt_account、P4-9 usage 基線
+→ 🔴 P0-11 UAT tick 非同步落盤（UAT hard gate）  ← 目前在這
+→ Phase 3 UAT（模擬環境，simulation: true；`TICK_ARCHIVE=1`）
+  → UAT Day 1：P0-11 落盤驗證、P0-9 dump 回報、P0-10 futopt_account、P4-9 usage 基線
   → UAT 期間：P2-7 秒停損率 + 動量→進場轉換率觀測
   → Phase 4 運維（P4-0～P4-4、P4-6、P4-8、P4-9）
   → 依 P2-7 數據決定 P1-6（VWAP 停損校準）
     → Phase 5 Pilot（CA 憑證 + simulation: false，固定 1 口）
 ```
 
-**Review #1 建議優先落地（不改交易邏輯）**：P0-10 → P0-9（DEBUG dump）→ UAT 收 P2-7 數據 → 再動 P1-6
+**Review #1 建議優先落地（不改交易邏輯）**：**P0-11** → P0-10 → P0-9（DEBUG dump）→ UAT 收 P2-7 數據 → 再動 P1-6
 
 UAT 後可選：P1-4、P2-1 部分成交、P2-2 lock 範圍縮小、P4-3 告警
 
@@ -584,3 +608,5 @@ UAT 後可選：P1-4、P2-1 部分成交、P2-2 lock 範圍縮小、P4-3 告警
 | 2026-06-10 | P0-9 `DUMP_ORDER_EVENTS` + P0-10 `_require_futopt_account` 落地 |
 | 2026-06-10 | 整合 [Code Review #1](docs/CodeReview%231.md)：P0-9/10、P1-6/7、P2-7/8、P4-8/9/10、坑十 VWAP 停損 |
 | 2026-06-10 | P0-3 peak 首 tick 校準；P0-8 trading_day 文件化；P2-1 部分成交防禦；P4-1 重連同步 |
+| 2026-06-12 | **P0-11** UAT 非同步 tick 落盤列為 UAT hard gate；回測改 UAT 累積、不批量下載歷史 |
+| 2026-06-12 | P0-11：盤中 plain CSV；gzip 改 rotate / 排程器壓縮（不盤中 streaming gzip） |
