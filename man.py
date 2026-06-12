@@ -156,8 +156,10 @@ class OrderSignal:
 
 
 class VWAPMomentumStrategy:
-    def __init__(self, api: Any = None):
+    def __init__(self, api: Any = None, clock: Any = None):
         self.api = api if api is not None else sj.Shioaji(simulation=SIMULATION)
+        # 注入式時鐘：實盤預設 time.time()；回測傳入 tick 時間驅動的時鐘以確保確定性。
+        self._clock = clock if clock is not None else time.time
 
         # 持倉狀態
         self.has_position = False
@@ -443,9 +445,15 @@ class VWAPMomentumStrategy:
             self.last_atr_refresh = ts
             threading.Thread(target=self.refresh_atr, daemon=True).start()
 
+    def _today(self) -> datetime.date:
+        """交易所「今天」：有 tick 時以 tick 日期為準（回測確定性），否則用系統日期。"""
+        if self._last_tick_exchange_dt is not None:
+            return self._last_tick_exchange_dt.date()
+        return datetime.date.today()
+
     def refresh_atr(self):
         try:
-            today = datetime.date.today()
+            today = self._today()
             with self.lock:
                 current_atr = self.current_atr
                 long_done = self._atr_long_lookback_date
@@ -514,17 +522,17 @@ class VWAPMomentumStrategy:
         self, ts: int, exchange_dt: datetime.datetime, tick_type: int
     ) -> None:
         self.last_tick_exchange_ts = ts
-        self._last_tick_wall_time = time.time()
+        self._last_tick_wall_time = self._clock()
         self._last_tick_exchange_dt = exchange_dt
         bucket = tick_type if tick_type in self._tick_type_counts else 0
         self._tick_type_counts[bucket] = self._tick_type_counts.get(bucket, 0) + 1
         self._maybe_warn_clock_skew(ts)
 
     def _maybe_warn_clock_skew(self, exchange_ts: int) -> None:
-        skew = abs(exchange_ts - time.time())
+        skew = abs(exchange_ts - self._clock())
         if skew <= CLOCK_SKEW_WARN_SEC:
             return
-        now = time.time()
+        now = self._clock()
         if now - self._last_clock_skew_warn_wall < 300:
             return
         self._last_clock_skew_warn_wall = now
@@ -541,7 +549,7 @@ class VWAPMomentumStrategy:
             self._last_tick_exchange_dt, SESSION_START, SESSION_END
         ):
             return
-        now = time.time()
+        now = self._clock()
         if now - self._last_tick_type_log_wall < 1800:
             return
         total = sum(self._tick_type_counts.values())
@@ -568,10 +576,10 @@ class VWAPMomentumStrategy:
             self._last_tick_exchange_dt, SESSION_START, SESSION_END
         ):
             return
-        silent = time.time() - self._last_tick_wall_time
+        silent = self._clock() - self._last_tick_wall_time
         if silent < NO_TICK_TIMEOUT_SEC:
             return
-        now = time.time()
+        now = self._clock()
         if now - self._last_no_tick_resubscribe_wall < 60:
             return
         self._last_no_tick_resubscribe_wall = now
@@ -1007,7 +1015,7 @@ class VWAPMomentumStrategy:
             with self.lock:
                 self.pending_trade = trade
                 self.pending_order_id = str(trade.order.id)
-                self.pending_since = time.time()
+                self.pending_since = self._clock()
             logger.info(
                 "下單 %s %d 口 @ %.1f (%s) | trade=%s",
                 action,
@@ -1322,7 +1330,7 @@ class VWAPMomentumStrategy:
         with self.lock:
             if not self.is_pending:
                 return
-            if time.time() - self.pending_since < PENDING_TIMEOUT_SEC:
+            if self._clock() - self.pending_since < PENDING_TIMEOUT_SEC:
                 return
             trade = self.pending_trade
 
