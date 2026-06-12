@@ -1,4 +1,4 @@
-# Code Review — 回測系統 Phase 2–5（依 `BackTestingSpec.md`）
+# Code Review — 回測系統 Phase 2-5（依 `BackTestingSpec.md`）
 
 > 審查範圍：`feat/backtest-phase3-mock-broker`（撮合核心）、`phase2-backtester`（重放迴圈）、
 > `phase4-determinism`（確定性閘門）、`phase5-param-sweep`（參數掃描）。四個分支為線性疊加，
@@ -217,14 +217,14 @@ patch、6.8 canonical hash 都有對應實作與測試，純標準庫、無 pand
 
 ## 對照「Definition of Done」逐項判定
 
-| DoD 項目 | 判定 | 說明 |
-| --- | --- | --- |
-| 各 Phase `test_*.py` 全綠（含既有） | ✅ | 實測 `89 tests OK`。 |
-| 回測 log 可被 `uat_report.py` 解析 | ✅ | `test_uat_report_parses_backtest_log` 通過。 |
-| 同資料連跑 3 次 SHA-256 一致 | ⚠️ **未真正驗收** | 僅在「無交易」案例驗過；有 ATR/交易時因 P0-1 + P1-1 為 flaky。 |
-| `man.py` 決策邏輯零改動 | ✅ | `git diff main..HEAD -- man.py` 為空。 |
-| 回測路徑無 `time.time()`/`now()`/`today()` | ⚠️ | 新檔無；但 hash 經由 `DAILY_SUMMARY.lock_wait_max_ms` **間接吃到 `perf_counter`**（P1-1）。 |
-| 無 pandas / numpy | ✅ | 純 stdlib。 |
+| DoD 項目                                   | 判定             | 說明                                                                                        |
+| ------------------------------------------ | ---------------- | ------------------------------------------------------------------------------------------- |
+| 各 Phase `test_*.py` 全綠（含既有）        | ✅                | 實測 `89 tests OK`。                                                                        |
+| 回測 log 可被 `uat_report.py` 解析         | ✅                | `test_uat_report_parses_backtest_log` 通過。                                                |
+| 同資料連跑 3 次 SHA-256 一致               | ⚠️ **未真正驗收** | 僅在「無交易」案例驗過；有 ATR/交易時因 P0-1 + P1-1 為 flaky。                              |
+| `man.py` 決策邏輯零改動                    | ✅                | `git diff main..HEAD -- man.py` 為空。                                                      |
+| 回測路徑無 `time.time()`/`now()`/`today()` | ⚠️                | 新檔無；但 hash 經由 `DAILY_SUMMARY.lock_wait_max_ms` **間接吃到 `perf_counter`**（P1-1）。 |
+| 無 pandas / numpy                          | ✅                | 純 stdlib。                                                                                 |
 
 ---
 
@@ -239,3 +239,45 @@ patch、6.8 canonical hash 都有對應實作與測試，純標準庫、無 pand
 > 一句話總結：**程式碼很守規矩，但「確定性閘門」目前是在沒有交易的情況下自證清白。**
 > 在把 P0-1 的 ATR 執行緒問題解掉、並用真 K 線跑出一次「會交易且三跑一致」之前，
 > 不建議用這套回測的 KPI 或參數掃描結果去做任何上線決策。
+
+---
+
+# Re-review — commit `b540e98`（feat/backtest-phase5-param-sweep）
+
+> 複審方法：`git diff main..HEAD -- man.py` 仍為空；實測 `93 tests OK`；對 determinism 測試
+> **連續壓測 8 次**確認不 flaky（`ATR(20) 更新: 40.00` + FILL，三跑 hash 一致，8/8 通過）。
+
+## 逐項結案
+
+| 項目                                  | 結論                     | 複審證據                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **P0-1** ATR 執行緒                   | ✅ **已解決（驗收通過）** | `backtester.py:49` 注入 `_maybe_refresh_atr → no-op` 擋掉背景緒；`:62-65` 在 `on_tick` 前、無 lock 時同步 `_pre_tick_refresh_atr`。`current_dt` 固定為當下 tick，無 race。`test_three_runs_same_hash_with_kbars_and_fills` 真的吃到 ATR=40 並產生 FILL，**壓測 8 次 hash 全一致**。先前「閘門在沒交易下自證清白」的洞已補上。 |
+| **P1-1** 掛鐘欄位進 hash              | ✅ **已解決**             | `determinism_check.normalize_audit_for_hash`（:26-40）對 `DAILY_SUMMARY` 剔除 `lock_wait_max_ms`/`lock_wait_over_50ms`/`no_tick_resubscribe`/`atr_min`/`atr_max`；`test_hash_ignores_operational_wall_clock` 驗 `lock_wait_max_ms` 由 0.001→99.0 hash 不變。                                                                  |
+| **P1-2** sweep 漏 patch observability | ✅ **已解決**             | `param_sweep._apply_params`（:31-42）三命名空間同 patch + 還原；`test_daily_summary_params_match_sweep` 斷言實際 `DAILY_SUMMARY.params.entry_band_points == 42.0`。                                                                                                                                                           |
+| **P2-1** timeout 吃成交               | ✅ **已解決**             | `backtester.py:59-60` 撮合先於 timeout，冷清窗的單先成交才輪到 timeout，避免被誤殺。                                                                                                                                                                                                                                          |
+| **P2-2** `usage()` 噴 warning         | ✅ **已解決**             | `mock_broker.py` 新增 no-op `usage()`。                                                                                                                                                                                                                                                                                       |
+| **P2-4** KPI 簡單平均                 | ✅ **已解決**             | `_aggregate_kpi`（:85-93）改為 `總 quick_sl / 總 exit` 加權。                                                                                                                                                                                                                                                                 |
+| **P2-3** 非交易時段跳過撮合           | ✅ **已解決**             | 程式 + 測試皆修正（R-1 見下方）。                                                                                                                                                                                                                                                                                             |
+
+## 複審新發現
+
+### R-1【低】`test_premarket_tick_still_runs_matching` — ✅ 已修正
+- 測試改為僅餵 **08:40** 盤前 tick，斷言 in-flight 單成交且 `on_tick` 未被呼叫。
+
+### R-2【低 / 模型取捨】撮合先於 timeout 後，冷清窗 IOC 變成「偏樂觀」
+- P2-1 修好後的副作用：tick N 掛單、tick N+1 在 >8s 後才到時，現在會用 N+1 的價**成交**這筆單；
+  線上 IOC 其實會在毫秒內 fill-or-kill，不會等 10 秒。即此前的「少算成交」改成了「冷清窗多算成交」。
+- 這是 spec 7.x 明確選擇的啟發式（用下一筆 tick 當成交代理），**一致且有文件**，故僅標記為已知殘留
+  不對稱，建議在 Pilot 用真實 `slippage_pts`/成交率回校時留意冷清時段。
+
+### R-3【極低】同步 ATR 仍含「當前分鐘未收盤 K 棒」— ✅ 已採納
+- `MockBroker.kbars` 改為 `bar.ts + 1min <= current_dt`，僅納入已收盤分鐘 K（Spec 7.9）。
+- ATR 刷新節奏 `int(tick.datetime.timestamp())` 與 `man._parse_tick` 的 `ts` 一致，✅。
+
+## 複審結論
+
+P0/P1 全數解決且**經壓測驗證不 flaky**，`man.py` 維持零改動，黃金鐵律已合理放寬（注入縫而非改策略
+數學）。剩餘 R-1 是測試覆蓋的假陽性（程式對的、測試沒測到），R-2/R-3 為已知且有文件的模型取捨。
+
+**結論：可放行進入用真資料的煙霧測試 / Pilot。** R-1/R-3 已落地；R-2 冷清窗 IOC 樂觀偏差列入
+Pilot 校準清單，不阻擋合併。

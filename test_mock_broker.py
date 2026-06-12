@@ -184,15 +184,15 @@ class TestMockBrokerMatching(unittest.TestCase):
             from data_loader import kbars_cache_path
 
             save_kbars_csv(bars, kbars_cache_path(cache_dir, code, day))
-            current = datetime.datetime(2026, 6, 12, 9, 0, 30)
-            broker = MockBroker(
-                clock=lambda: current.timestamp(), cache_dir=cache_dir
-            )
-            broker.current_dt = current
+            broker = MockBroker(clock=lambda: 0.0, cache_dir=cache_dir)
             contract = broker.resolve_contract(code)
-            kb = broker.kbars(contract, day.isoformat(), day.isoformat())
-            self.assertEqual(len(kb.Close), 1)
-            self.assertEqual(kb.Close[-1], 18005.0)
+            broker.current_dt = datetime.datetime(2026, 6, 12, 9, 0, 30)
+            kb_mid = broker.kbars(contract, day.isoformat(), day.isoformat())
+            self.assertEqual(len(kb_mid.Close), 0)
+            broker.current_dt = datetime.datetime(2026, 6, 12, 9, 1, 0)
+            kb_closed = broker.kbars(contract, day.isoformat(), day.isoformat())
+            self.assertEqual(len(kb_closed.Close), 1)
+            self.assertEqual(kb_closed.Close[-1], 18005.0)
 
     def test_fill_never_worse_than_limit(self):
         epoch = datetime.datetime(2026, 6, 12, 13, 44, 0).timestamp()

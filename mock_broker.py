@@ -86,8 +86,12 @@ class MockBroker:
         lows: List[float] = []
         closes: List[float] = []
         for bar in bars:
-            if current is not None and bar.ts > current:
-                continue
+            if current is not None:
+                if bar.ts > current:
+                    continue
+                # Only fully closed 1-minute bars (R-3): bar end <= current_dt
+                if bar.ts + datetime.timedelta(minutes=1) > current:
+                    continue
             highs.append(bar.High)
             lows.append(bar.Low)
             closes.append(bar.Close)

@@ -82,11 +82,8 @@ class TestBacktestEngine(unittest.TestCase):
         import shioaji as sj
         from shioaji import OrderState
 
-        session_tick = ReplayTick(
-            datetime.datetime(2026, 6, 12, 9, 0, 0), "18000", 1, 1
-        )
         premarket_tick = ReplayTick(
-            datetime.datetime(2026, 6, 12, 8, 50, 0), "18000", 1, 1
+            datetime.datetime(2026, 6, 12, 8, 40, 0), "18000", 1, 1
         )
         engine = BacktestEngine("TXFR1", [datetime.date(2026, 6, 12)])
         engine.broker.latency_ms = 0
@@ -105,16 +102,22 @@ class TestBacktestEngine(unittest.TestCase):
         engine.strategy.pending_intent = "entry"
         engine.strategy.is_pending = True
         events: list[tuple] = []
-        original = engine.strategy.handle_order_event
+        on_tick_times: list[datetime.time] = []
+        original_handle = engine.strategy.handle_order_event
+        original_on_tick = engine.strategy.on_tick
 
         def capture(stat, msg):
             events.append((stat, msg))
-            return original(stat, msg)
+            return original_handle(stat, msg)
+
+        def spy_on_tick(tick):
+            on_tick_times.append(tick.datetime.time())
+            return original_on_tick(tick)
 
         engine.strategy.handle_order_event = capture
+        engine.strategy.on_tick = spy_on_tick
 
         def fake_replay(_code, _dates, cache_dir=None):
-            yield session_tick
             yield premarket_tick
 
         with patch("backtester.iter_replay_ticks", fake_replay):
@@ -122,6 +125,8 @@ class TestBacktestEngine(unittest.TestCase):
 
         deals = [e for e in events if e[0] == OrderState.FuturesDeal]
         self.assertEqual(len(deals), 1)
+        self.assertEqual(on_tick_times, [])
+        self.assertLess(premarket_tick.datetime.time(), datetime.time(8, 45))
 
 
 if __name__ == "__main__":

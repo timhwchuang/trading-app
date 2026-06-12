@@ -8,10 +8,12 @@
 > 1. **絕對不可修改** `man.py` 的決策邏輯（`process_strategy` / `manage_exit` /
 >    `update_vwap` / `update_momentum` / `_handle_futures_deal` / `_handle_futures_order`
 >    / `_apply_deal_fill` / `_stop_loss_hit` / `_in_exit_grace_period`）。
-> 2. 回測只能**注入** `api`（=MockBroker）與 `clock`（=虛擬時鐘），以及**新增**檔案。
+> 2. 回測只能**注入**外部依賴與**新增**檔案，允許的注入縫：
+>    * `api`（=MockBroker）、`clock`（=VirtualClock）
+>    * `strategy._maybe_refresh_atr`（回測改 no-op；ATR 改由引擎同步刷新，見 7.1）
 > 3. 不可引入 `pandas` / `numpy`，只用 Python 標準庫。
 > 4. 不可使用 `time.time()` / `datetime.now()` / `date.today()`。時間一律來自 `tick.datetime`。
-> 5. 每個 Phase 完成後，`python -m unittest discover -p "test_*.py"` 必須全綠。
+> 5. 每個 Phase 完成後，`python -m unittest discover -p "test_*.py"` 必須全綠（目前 93 項）。
 
 ---
 
@@ -39,7 +41,8 @@
   `self.api.kbars(contract, start, end)`，期待回傳物件有 `.High`/`.Low`/`.Close`(list)。
 
 `data_loader.py` 已具備：`ReplayTick`、`iter_replay_ticks(code, dates, cache_dir=)`、
-`download_and_cache(...)`、`date_range(start, end)`。
+`download_and_cache(...)`、`date_range(start, end)`、
+`download_and_cache_kbars(...)`、`load_kbars_csv(...)`、`iter_kbars_in_range(...)`。
 
 ---
 
@@ -61,24 +64,36 @@ class VirtualClock:
 class BacktestEngine:
     def __init__(self, code: str, dates: list[datetime.date], cache_dir=...):
         self.clock = VirtualClock()
-        self.broker = MockBroker(clock=self.clock)        # Phase 3
+        self.broker = MockBroker(clock=self.clock, cache_dir=cache_dir)
         self.strategy = VWAPMomentumStrategy(api=self.broker, clock=self.clock)
         self.strategy.contract = self.broker.resolve_contract(code)
+        # 7.1：阻擋 on_tick 內的背景 thread ATR；改由 run() 同步刷新
+        self.strategy._maybe_refresh_atr = _noop_maybe_refresh_atr
         self.code, self.dates, self.cache_dir = code, dates, cache_dir
 
     def run(self) -> None:
         for tick in iter_replay_ticks(self.code, self.dates, cache_dir=self.cache_dir):
-            self.clock.set(tick.datetime.timestamp())   # 1. 推進虛擬時鐘
-            self.broker.current_dt = tick.datetime        # 供 kbars 時間過濾
-            self.strategy.on_tick(tick)                   # 2. 同一份決策邏輯
-            self.broker.process_matching_queue(tick, self.strategy)  # 3. 撮合
-            self.strategy._check_pending_timeout()        # 4. 超時（虛擬時鐘驅動）
-        # 收盤：輸出當日 DAILY_SUMMARY
+            self.clock.set(tick.datetime.timestamp())      # 1. 推進虛擬時鐘
+            self.broker.current_dt = tick.datetime         # 供 kbars 時間過濾
+            self.broker.process_matching_queue(tick, self.strategy)  # 2. 撮合（先於 timeout）
+            self.strategy._check_pending_timeout()       # 3. 超時（虛擬時鐘驅動）
+            if is_trading_session(tick.datetime, SESSION_START, SESSION_END):
+                _pre_tick_refresh_atr(self.strategy, int(tick.datetime.timestamp()))  # 4. 同步 ATR
+                self.strategy.on_tick(tick)                # 5. 決策（同一份邏輯）
         if self.strategy._last_tick_exchange_dt is not None:
             self.strategy._emit_daily_summary(
                 self.strategy._last_tick_exchange_dt.date()
             )
 ```
+
+> **主迴圈語意（7.2 / 7.3 修訂後）**
+> * **撮合先於 timeout**：冷清時段下一筆 tick 間隔 >8s 時，先嘗試 IOC 成交/取消，再判定
+>   pending 超時，避免成交回報被 `_clear_pending` 後丟棄（見 `CodeReview#BackTesting.md` P2-1）。
+> * **試撮隔離只擋 `on_tick`**：非交易時段 tick 仍跑撮合與 timeout（7.3），避免 in-flight
+>   單卡在佇列；VWAP/動量不被 08:45 前 tick 污染（6.4）。
+> * **timeout 先於 `on_tick`**：進決策前 `is_pending` 已反映超時解除（6.3）。
+> * **ATR 在 `on_tick` 前同步算完**（7.1）：`refresh_atr()` 不可在 `on_tick` 持 lock 時呼叫
+>   （會與 `refresh_atr` 內部 `with self.lock` 死鎖）。
 
 ### 2.3 邊界情況（必須處理）
 
@@ -91,6 +106,11 @@ class BacktestEngine:
 * `test_backtester.py::test_engine_runs_empty`：無快取時 `run()` 不丟例外。
 * `test_backtester.py::test_clock_advances`：餵 2 筆人工 tick，`clock()` 等於最後一筆
   `tick.datetime.timestamp()`。
+* `test_backtester.py::test_pending_timeout_before_tick_processing`（6.3）：跨 tick 超時後，
+  進入 `on_tick` 前 `is_pending` 已為 False。
+* `test_backtester.py::test_premarket_ticks_are_filtered`（6.4）：08:45 前 tick 不進 `on_tick`。
+* `test_backtester.py::test_premarket_tick_still_runs_matching`（7.3）：盤前 tick 仍撮合
+  in-flight 單。
 
 ---
 
@@ -105,7 +125,7 @@ class BacktestEngine:
 | `kbars(contract, start, end)`             | 回傳 `_KBars`，含 `.High/.Low/.Close`(list[float]) | 由 kbars 快取過濾 `ts <= current_dt`    |
 | `update_status(trade=...)`                | no-op                                              | 超時補查呼叫；回測直接 pass             |
 | `order_deal_records()`                    | 回傳 `[]`                                          | 同上                                    |
-| `usage()`                                 | 可省略（回測不需）                                 | —                                       |
+| `usage()`                                 | 回傳含 `bytes/limit_bytes/remaining_bytes` 的物件 | `refresh_atr` 末端會呼叫；建議 no-op 常數回傳（7.4） |
 | `resolve_contract(code)`                  | 回傳簡單物件含 `.code`                             | 供引擎設定 `strategy.contract`          |
 
 > `_Trade` / `_KBars` 用 `dataclass` 或 `SimpleNamespace` 即可。`order.id` 用遞增整數轉 str。
@@ -140,14 +160,14 @@ def place_order(self, contract, order, timeout=0):
    * 若 `tick.volume > BLOWOUT_VOL`（預設 = `config.MOMENTUM_VOL_1S`）→ `slippage = BLOWOUT_SLIP`（預設 2.5）。
    * 若該單 `intent == "exit"` 且 `tick.datetime` 在 13:44 之後 → `slippage = FLATTEN_SLIP`（預設 8.0）。
      （intent 從 `strategy.pending_intent` 取，或在 place_order 時一併記錄。）
-4. **撮合基準 = 成交價 `close`（與線上同構）**：
+4. **撮合基準 = 成交價 `close`（與線上同構）**，且 **6.1 穿價 clamp**：
    ```python
    close = float(tick.close); limit = ord["limit_price"]; is_buy = ord["action"] == "Buy"
    if is_buy:
-       if close <= limit: fill = min(close, limit) + slippage
-       else:              fill = None   # 不可成交
+       if close <= limit: fill = min(limit, close + slippage)   # fill <= limit
+       else:              fill = None
    else:
-       if close >= limit: fill = max(close, limit) - slippage
+       if close >= limit: fill = max(limit, close - slippage)   # fill >= limit
        else:              fill = None
    ```
 5. **未成交 → 取消（IOC）**：呼叫
@@ -172,12 +192,12 @@ def place_order(self, contract, order, timeout=0):
 
 ### 3.4 `kbars` 防 look-ahead（重要）
 
-回測的 `kbars(start, end)` **只能回傳 `ts <= self.current_dt` 的 bar**，否則 ATR 會偷看
+回測的 `kbars(start, end)` **只能回傳已收盤且 `ts <= current_dt` 的 1 分 K**，否則 ATR 會偷看
 未來。實作：
 * `data_loader` 增加 `download_and_cache_kbars` / `load_kbars_csv`（仿 ticks 快取，
   欄位 `ts,Open,High,Low,Close,Volume`）。
-* `MockBroker.kbars` 載入快取後，過濾 `bar_ts <= current_dt`，回傳含 `.High/.Low/.Close` 的
-  `_KBars`。
+* `MockBroker.kbars` 過濾：`bar_ts <= current_dt` **且** `bar_ts + 1min <= current_dt`
+  （僅納入已收盤分鐘 K，7.9 / R-3），回傳含 `.High/.Low/.Close` 的 `_KBars`。
 * 若快取無 kbars（UAT 初期），允許 `kbars` 回傳空 → `_compute_atr` 回 0.0 → 策略因
   `current_atr < MIN_ATR_THRESHOLD` 不進場（安全退化）。
 
@@ -198,6 +218,12 @@ def place_order(self, contract, order, timeout=0):
 5. `test_latency_gate`：下單後同一 tick（未過 15ms）不成交；後續 tick 過延遲才成交。
 6. `test_no_lookahead_kbars`：`current_dt` 設為某分鐘，`kbars` 回傳的最後一根 bar 的
    ts ≤ current_dt。
+7. `test_fill_never_worse_than_limit`（6.1）：buy fill ≤ limit；FLATTEN_SLIP=8 時
+   close=18000、limit=18003 → fill=18003（非 18008）。
+8. `test_atr_available_on_first_tick`（6.5）：前日 kbars 快取存在時，08:45 首 tick 後
+   `current_atr > 0`。
+9. `test_spread_calibration_optional`（6.7）：`spread_calibration` 預設關；開啟時以
+   half-spread 提升 slippage，撮合基準仍為 `close`。
 
 ---
 
@@ -207,24 +233,35 @@ def place_order(self, contract, order, timeout=0):
 
 ```python
 def run_hash(code, dates, cache_dir) -> str:
-    """跑一次回測，蒐集所有 SIGNAL_AUDIT + FILL_AUDIT 行（log 攔截），
-    對其串接做 SHA-256。回傳 hexdigest。"""
+    """跑一次回測，蒐集 SIGNAL_AUDIT + FILL_AUDIT + DAILY_SUMMARY（6.2），
+    正規化後串接 SHA-256。回傳 hexdigest。"""
+
+def normalize_audit_for_hash(label: str, json_part: str) -> str:
+    """json.loads → 剔除非確定性欄位（7.5）→ json.dumps(sort_keys=True)。"""
 ```
 
 實作要點：
-* 用 `logging.Handler` 攔截 logger 輸出，只收 message 以 `"SIGNAL_AUDIT "` 或
-  `"FILL_AUDIT "` 開頭的行（取 JSON 部分）。
+* 用 `logging.Handler` 攔截 `man` logger，收 `"SIGNAL_AUDIT "` / `"FILL_AUDIT "` /
+  `"DAILY_SUMMARY "` 開頭的 message（取 JSON 部分）。
 * **hash 前不可包含時間戳前綴**（`%(asctime)s`），只 hash JSON 內容。
-* JSON 內已是 round 過的欄位（`observability` 已 round），故跨平台穩定。
+* **6.8**：`sort_keys=True, separators=(",", ":")` 正規化（不更動生產 log bytes）。
+* **7.5**：`DAILY_SUMMARY` hash 前剔除 `operational` 內掛鐘/遙測欄位：
+  `lock_wait_max_ms`、`lock_wait_over_50ms`、`no_tick_resubscribe`、`atr_min`、`atr_max`
+  （來自 `time.perf_counter()` 或背景緒污染；不屬決策語意 KPI）。
+* JSON 內決策欄位已 round（`observability`），故跨平台穩定。
 
 ### 4.2 驗收條件（Phase 4）
-1. `test_determinism.py::test_three_runs_same_hash`：同一組快取連跑 3 次，
-   `run_hash` 三次結果**完全相同**。
-2. `test_determinism.py::test_uat_report_parses_backtest_log`：把回測 log 寫檔，
-   `uat_report.compute_metrics(lines)` 能解析出 `fill_count > 0` 且
-   `momentum_to_entry_conversion` 不為 None（在有交易的測試資料下）。
-3. 人工核對：回測 log 跑 `python uat_report.py <log>`，輸出的「秒停損率」「轉換率」
-   欄位存在且數值合理（非 N/A，當測試資料有完整 round-trip）。
+1. `test_determinism.py::test_three_runs_same_hash`：同資料連跑 3 次 hash 一致（無交易退化案例）。
+2. `test_determinism.py::test_three_runs_same_hash_with_kbars_and_fills`（7.6）：**有真 K 線
+   且產生 FILL** 時，連跑 3 次 hash 仍一致——確定性閘門的真正驗收。
+3. `test_determinism.py::test_uat_report_parses_backtest_log`：`fill_count > 0` 且
+   `momentum_to_entry_conversion` 不為 None。
+4. `test_determinism.py::test_daily_summary_in_hash`（6.2）：修改 DAILY_SUMMARY 決策欄位
+   後 hash 必須改變。
+5. `test_determinism.py::test_hash_robust_to_key_order`（6.8）：key 順序打亂後 hash 不變。
+6. `test_determinism.py::test_hash_ignores_operational_wall_clock`（7.5）：僅
+   `lock_wait_max_ms` 不同時 hash 不變。
+7. 人工核對：回測 log 跑 `python uat_report.py <log>`，指標語意與實盤一致。
 
 ---
 
@@ -235,8 +272,8 @@ def run_hash(code, dates, cache_dir) -> str:
 ```python
 def sweep(grid: dict[str, list], dates_train, dates_valid, code, cache_dir) -> list[dict]:
     """對 grid 的笛卡兒積，逐組：
-      1. 以該組參數覆寫參數（⚠️ 見 6.6：必須 monkeypatch `man` 模組命名空間，
-         不是 config！man.py 頂層已 from config import，patch config 無效）
+      1. 以該組參數覆寫（⚠️ 見 6.6 / 7.7：必須 patch `man` + `config` + `observability`
+         三個模組命名空間；只 patch config 對決策與 DAILY_SUMMARY.params 皆無效）
       2. 跑 train 區間回測 → 收 DAILY_SUMMARY（train KPI）
       3. 跑 valid 區間回測 → 收 DAILY_SUMMARY（valid KPI，out-of-sample）
       4. 輸出 {params, train_kpi, valid_kpi} 一列
@@ -254,18 +291,23 @@ def sweep(grid: dict[str, list], dates_train, dates_valid, code, cache_dir) -> l
 
 ### 5.3 驗收條件（Phase 5）
 1. `test_param_sweep.py::test_sweep_small_grid`：2×2 grid，回傳 4 列，每列含
-   `params/train_kpi/valid_kpi`，且排序用的是 valid。
-2. `test_param_sweep.py::test_config_restored`：sweep 後 `config` 全域值還原（不污染）。
+   `params/train_kpi/valid_kpi`，且依 `valid_score` 排序。
+2. `test_param_sweep.py::test_config_restored`：sweep 後 `man.*`、`config.*`、
+   `observability.*` 皆還原。
+3. `test_param_sweep.py::test_man_namespace_patched`（6.6）：`process_strategy` 讀到掃描值。
+4. `test_param_sweep.py::test_daily_summary_params_match_sweep`（7.7）：sweep 期間
+   `DAILY_SUMMARY.params` 與掃描值一致。
+
+### 5.4 KPI 聚合（7.8）
+* `quick_stop_loss_rate` 用**加權**算法：`Σ quick_sl_count / Σ exit_count`（非各日簡單平均）。
 
 ---
 
-## Phase 6：Code Review 迭代修訂（P0/P1）
+## Phase 6：初版 Code Review 修訂（P0/P1）— 已實作
 
-> 本章為 review 後追加的修訂事項，**優先於前述各 Phase 的對應段落**。
-> 建議實作順序（P0 優先）：6.1 → 6.3 → 6.4 → 6.6 →（P1）6.2 → 6.8 → 6.5 → 6.7。
-> P0：6.1 穿價、6.3 timeout 時序、6.4 試撮隔離、6.6 模組動態注入。
-> P1：6.2 KPI 漂移、6.8 hash 正規化、6.5 ATR 熱身、6.7 bid/ask 滑價校準。
-> 後續會再迭代細化，本章先鎖定問題與驗收。
+> 本章為 Phase 2–5 初版後的第一輪 review 修訂，**均已落地**。
+> **7.x 章節**為第二輪 review（`CodeReview#BackTesting.md`）修訂，優先於 6.3/6.4 的初版敘述。
+> 實作順序：6.1 → 6.3 → 6.4 → 6.6 → 6.2 → 6.8 → 6.5 → 6.7 → **Phase 7**。
 
 ### 6.1【P0】限價單穿價保護（修訂 3.3 步驟 4）
 
@@ -301,10 +343,10 @@ else:
 **修訂**：`run_hash` 攔截範圍擴為 `SIGNAL_AUDIT` + `FILL_AUDIT` + `DAILY_SUMMARY`。
 
 **前置條件（必須先滿足，否則確定性閘門會 flaky）**：
-* 先審 `_emit_daily_summary()` 輸出，確認**每一個數值欄位都已 round**（沿用第 6 節
-  「只 hash round 過欄位」鐵律），跨平台才不會逐位元裂開。
-* 確認 DAILY_SUMMARY 不含 wall-clock、絕對路徑、或順序不穩的內容（`params` 快照於同
-  config 連跑下穩定，可納入）。
+* 決策語意欄位已 round（`observability`）。
+* `operational` 內掛鐘/遙測欄位**不納入 hash**（7.5）；生產 log 仍完整輸出，僅 hash
+  正規化階段剔除。
+* `params` 快照於 sweep 時須同步 patch `observability`（7.7），連跑下穩定。
 
 **驗收**：
 * `test_determinism.py::test_daily_summary_in_hash`：修改任一 DAILY_SUMMARY 欄位值後，
@@ -313,23 +355,12 @@ else:
 
 ### 6.3【P0】Pending Timeout 時序修正（修訂 2.2 主迴圈順序）
 
-**問題**：現況順序 `clock.set() → on_tick() → process_matching_queue() →
-_check_pending_timeout()`。線上 `_timeout_loop()` 是**獨立背景執行緒每秒檢查一次**，與
-tick 無關；故線上在「09:00:00 下單、09:00:10 才有下一筆 tick」的空窗中，timeout 早已
-解除。現況回測卻讓 `on_tick` 看到一個**線上不會存在的 stale `is_pending`**，破壞同構性。
+**問題**：原順序 `on_tick → 撮合 → timeout` 會讓 `on_tick` 看到線上不存在的 stale
+`is_pending`（線上 `_timeout_loop` 獨立於 tick）。
 
-**修訂**：將 `_check_pending_timeout()` 移到 `on_tick()` 之前：
-
-```python
-self.clock.set(tick.datetime.timestamp())   # 1. 推進虛擬時鐘
-self.broker.current_dt = tick.datetime
-self.strategy._check_pending_timeout()        # 2. 先用新時鐘解除過期 pending
-self.strategy.on_tick(tick)                    # 3. 決策（看到的是 fresh pending 狀態）
-self.broker.process_matching_queue(tick, self.strategy)  # 4. 撮合
-```
-
-> 注意：因 `PENDING_TIMEOUT_SEC >> latency_ms`，timeout 先於撮合不會誤殺「本 tick 應成交」
-> 的單；且拖數秒才成交的 IOC 本就不真實，先 timeout 更貼近線上。
+**修訂（已實作，見 2.2 / 7.2）**：每 tick 順序為
+`撮合 → timeout → (session) 同步 ATR → on_tick`。其中 **timeout 仍先於 `on_tick`**，
+滿足「進決策前 pending 已刷新」；**撮合先於 timeout**（7.2）避免冷清間隔誤殺成交。
 
 **驗收**：`test_backtester.py::test_pending_timeout_before_tick_processing`
 * 09:00:00 下單後，下一筆 tick 在 09:00:10（> `PENDING_TIMEOUT_SEC`）抵達時，
@@ -348,14 +379,15 @@ man.py**（違反黃金鐵律）。此舉與線上同構——線上 `simtrade` 
 **禁止硬編 08:45**。
 
 ```python
-# backtester.run() 迴圈內，clock.set 之後、on_tick 之前
-if not is_trading_session(tick.datetime, SESSION_START, SESSION_END):
-    continue
+# backtester.run()：只跳過 on_tick，撮合/timeout 仍執行（7.3 修訂）
+if is_trading_session(tick.datetime, SESSION_START, SESSION_END):
+    _pre_tick_refresh_atr(...)
+    self.strategy.on_tick(tick)
 ```
 
 **驗收**：`test_backtester.py::test_premarket_ticks_are_filtered`
-* 餵入 08:40、08:43 試撮 tick + 08:46 正式 tick；08:45 前的 tick 不得進入 `on_tick`
-  （VWAP/動量不被其污染）。
+* 08:45 前的 tick 不得進入 `on_tick`（VWAP/動量不被污染）。
+* `test_premarket_tick_still_runs_matching`（7.3）：盤前 tick 仍處理 in-flight 撮合。
 
 ### 6.5【P1】ATR 熱身資料（修訂 3.4 kbars 快取）
 
@@ -392,37 +424,28 @@ vwap_hit = price <= self.current_vwap - VWAP_STOP_POINTS
 從 `man` 的 global 解析，故建構後再 patch 亦有效）：
 
 ```python
-import man, config
-
-_PATCH_TARGETS = (
-    "ENTRY_BAND_POINTS", "VWAP_STOP_POINTS", "EXHAUSTION_VOL", "EXIT_GRACE_TICKS",
-    # ... 其餘掃描旋鈕同步列入
-)
+import man, config, observability
 
 def _apply_params(params: dict) -> dict:
-    """patch man.* + config.*（兩者都改：DAILY_SUMMARY.params 取自 config 快照），
-    回傳原值供還原。"""
     saved = {}
     for k, v in params.items():
-        saved[k] = (getattr(man, k, None), getattr(config, k, None))
-        setattr(man, k, v)       # ★ 決策邏輯真正讀的是這個
-        setattr(config, k, v)    # 讓 DAILY_SUMMARY.params 快照同步反映
+        saved[k] = (
+            getattr(man, k, None),
+            getattr(config, k, None),
+            getattr(observability, k, None),
+        )
+        setattr(man, k, v)              # ★ 決策邏輯讀 man.*
+        setattr(config, k, v)
+        setattr(observability, k, v)     # ★ DAILY_SUMMARY.params 讀 observability.*
     return saved
-
-def _restore_params(saved: dict) -> None:
-    for k, (mv, cv) in saved.items():
-        setattr(man, k, mv)
-        setattr(config, k, cv)
 ```
 
-> 注意：`config.settings` / `DAILY_SUMMARY.params` 若另取 `config.*`，需一併 patch
-> `config.*` 以免 KPI 稽核連結對不上參數。以上兩者都 patch 即可。
+> `build_config_snapshot()` 讀的是 `observability.ENTRY_BAND_POINTS` 等 import 綁定，
+> **只 patch config 無效**（7.7）。
 
 **驗收**：
-* `test_param_sweep.py::test_man_namespace_patched`：patch 後在 `process_strategy`
-  路徑讀到的 `ENTRY_BAND_POINTS` 等於掃描值（非 import 時的舊值）。
-* `test_param_sweep.py::test_config_restored`：sweep 後 `man.*` **與** `config.*`
-  全域值皆還原（不污染）。
+* `test_man_namespace_patched`、`test_config_restored`（含 observability 還原）。
+* `test_daily_summary_params_match_sweep`（7.7）。
 
 ### 6.7【P1（部分採納）】Bid/Ask 真實度 — 僅作滑價校準，不得當撮合基準
 
@@ -481,24 +504,102 @@ if half_spread is not None:
 
 ---
 
+## Phase 7：Code Review 落地修訂（`CodeReview#BackTesting.md`）
+
+> Phase 2–6 初版實作後的 review 反饋，**已落地**。優先於初版 2.2 / 6.3 / 6.4 段落。
+
+### 7.1【P0】同步 ATR 注入（修訂背景 thread 問題）
+
+**問題**：`man.py` 的 `_maybe_refresh_atr` 以 daemon thread 跑 `refresh_atr()`。
+回測中 `MockBroker.current_dt` 隨主迴圈推進，背景緒讀取時可能 look-ahead 且非確定性。
+若在 `on_tick` 持 lock 時同步呼叫 `refresh_atr()` 會死鎖（`refresh_atr` 內部再搶 lock）。
+
+**修訂（不動 `man.py` 決策邏輯）**：
+1. `BacktestEngine.__init__`：`strategy._maybe_refresh_atr = _noop_maybe_refresh_atr`
+2. `run()` 內、**`on_tick` 之前且無 lock 時**：`_pre_tick_refresh_atr(strategy, ts)`
+   同步呼叫 `refresh_atr()`
+
+**驗收**：`test_three_runs_same_hash_with_kbars_and_fills`——真 K 線、ATR≥門檻、有 FILL，
+連跑 3 次 hash 一致。
+
+### 7.2【P2】撮合先於 timeout
+
+冷清 tick 間隔 > `PENDING_TIMEOUT_SEC` 時，先 `process_matching_queue` 再
+`_check_pending_timeout`，避免成交回報因 pending 已清而被忽略。
+
+> **已知偏差**：timeout 路徑不計 `intent_cancelled`（與線上 `FuturesOrder` Cancel KPI
+> 略有差）；冷清時段成交率可能略高估。見 `CodeReview#BackTesting.md` P2-1。
+
+### 7.3【P2】試撮隔離只擋決策
+
+非 `SESSION` tick：**不** `continue` 整筆 tick；仍跑撮合與 timeout，僅跳過 `on_tick`。
+
+### 7.4【P2】`MockBroker.usage()` no-op
+
+避免 `refresh_atr` → `_log_api_usage` 洗版 warning。
+
+### 7.5【P1】確定性 hash 剔除 operational 掛鐘欄位
+
+`normalize_audit_for_hash` 對 `DAILY_SUMMARY` 剔除：
+`lock_wait_max_ms`、`lock_wait_over_50ms`、`no_tick_resubscribe`、`atr_min`、`atr_max`。
+
+### 7.6【P0】有交易路徑的確定性測試
+
+`test_three_runs_same_hash`  alone 僅覆蓋「無交易退化」；必須另有 7.1 的真 K 線 + FILL 測試。
+
+### 7.7【P1】sweep 三模組 patch
+
+`_apply_params` / `_restore_params` 同步 patch `observability.*`（`build_config_snapshot` 來源）。
+
+### 7.8【P2】加權 quick_stop_loss_rate
+
+`param_sweep._aggregate_kpi`：`Σ count / Σ exit_count`，非各日 rate 簡單平均。
+
+### 7.9【極低】僅納入已收盤 1 分 K（R-3）
+
+`MockBroker.kbars` 排除當前未收完的分鐘棒（`bar.ts + timedelta(minutes=1) > current_dt`），
+避免 within-minute look-ahead。`test_no_lookahead_kbars` 驗證 09:00:30 無 bar、09:01:00 含
+09:00 棒。
+
+### 7.10【低】P2-3 回歸測試修正（R-1）
+
+`test_premarket_tick_still_runs_matching` 僅餵 **08:40** 盤前 tick（非 08:50），斷言 in-flight
+單仍撮合且 `on_tick` 未被呼叫。
+
+---
+
 ## 總驗收清單（Definition of Done）
 
-* [ ] 每個 Phase 的 `test_*.py` 全部通過；`unittest discover` 全綠（含既有 69 項）。
-* [ ] 回測 log 能直接被 `uat_report.py` 解析，指標語意與實盤一致。
-* [ ] 同資料連跑 3 次 SHA-256 一致（確定性閘門）。
-* [ ] `man.py` 決策邏輯零改動（`git diff man.py` 僅含注入縫，不含策略數學）。
-* [ ] 無 `time.time()` / `datetime.now()` / `date.today()` 出現在回測路徑。
-* [ ] 無 `pandas` / `numpy` 依賴。
+* [x] 每個 Phase 的 `test_*.py` 全部通過；`unittest discover` 全綠（**93 項**，含既有 69 項）。
+* [x] 回測 log 能直接被 `uat_report.py` 解析，指標語意與實盤一致。
+* [x] 同資料連跑 3 次 SHA-256 一致（含**有 K 線 + 有 FILL** 路徑，7.6）。
+* [x] `man.py` 決策邏輯零改動（`git diff man.py` 為空；僅引擎注入 `_maybe_refresh_atr`）。
+* [x] 回測路徑無 `time.time()` / `datetime.now()` / `date.today()`；hash 剔除 `perf_counter` 遙測欄位（7.5）。
+* [x] 無 `pandas` / `numpy` 依賴。
+
+---
+
+## 實作狀態與檔案對照
+
+| Phase | 狀態 | 主要檔案 |
+|-------|------|----------|
+| 2 | ✅ | `backtester.py`, `test_backtester.py` |
+| 3 | ✅ | `mock_broker.py`, `test_mock_broker.py`, `data_loader.py`（kbars） |
+| 4 | ✅ | `determinism_check.py`, `test_determinism.py` |
+| 5 | ✅ | `param_sweep.py`, `test_param_sweep.py` |
+| 6 | ✅ | 穿價/timeout/試撮/hash/ATR熱身/bid-ask校準/三模組patch |
+| 7 | ✅ | Code Review 落地（見上） |
+
+分支：`feat/backtest-phase5-param-sweep`（線性含 Phase 2–7 全部 commit）。
 
 ---
 
 ## 給實作模型的執行順序
 
-1. 先 Phase 3 的 `MockBroker`（含 `_Trade`/`_KBars`/`resolve_contract`），寫
-   `test_mock_broker.py` 跑綠。
-2. 再 Phase 2 的 `backtester.py`（接上 MockBroker），寫 `test_backtester.py`。
-3. 用 `data_loader.download_and_cache` 抓 2-3 個交易日真資料（或自製合成快取）做煙霧測試。
-4. Phase 4 確定性 + uat_report 比對。
-5. Phase 5 參數掃描。
+1. Phase 3 `MockBroker` + `test_mock_broker.py`
+2. Phase 2 `backtester.py` + `test_backtester.py`（含 7.1 ATR 注入、7.2/7.3 迴圈順序）
+3. 合成或真實 tick/kbar 快取煙霧測試
+4. Phase 4 確定性（含 7.5/7.6）
+5. Phase 5 參數掃描（含 7.7/7.8）
 
-每完成一步，跑全測試，確認 `man.py` 無策略邏輯改動，再進下一步。
+每完成一步跑全測試，確認 `man.py` 無策略邏輯改動。
