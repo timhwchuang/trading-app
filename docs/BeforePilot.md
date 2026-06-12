@@ -13,13 +13,13 @@
 
 ```bash
 # 單日完整報告（含調參提示）
-python uat_report.py /path/to/theman-uat.log
+python src/uat_report.py /path/to/theman-uat.log
 
 # JSON 輸出（餵給 AI）
-python uat_report.py /path/to/theman-uat.log --json
+python src/uat_report.py /path/to/theman-uat.log --json
 
 # 多日趨勢（合併輪替 log 或 grep DAILY_SUMMARY）
-python uat_report.py day1.log day2.log day3.log --trend
+python src/uat_report.py day1.log day2.log day3.log --trend
 ```
 
 秒停損率與停損分布（進入 Pilot 的硬指標）
@@ -67,7 +67,7 @@ tick_type 的推斷品質（P1-3 觀測項）
 
 向券商申請正式 CA 憑證，並於系統環境變數中設定 SJ_CA_PATH 與 SJ_CA_PASSWD。
 
-將 config.yaml 內的環境參數改為 simulation: false。
+將 `config/config.yaml` 內的環境參數改為 simulation: false。
 
 日誌級別強制收緊（防範熱路徑阻塞）
 

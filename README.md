@@ -67,9 +67,10 @@ $env:LOG_LEVEL = "INFO"
 
 ```powershell
 .\.venv\Scripts\activate
-$env:PYTHONPATH = "src"
 python src\man.py
 ```
+
+（`python src\man.py` 會自動把 `src/` 加入 import path；若從其他入口 import 模組，可另設 `$env:PYTHONPATH = "src"`。）
 
 首次請確認 `config/config.yaml` 中 `simulation: true`，通過 UAT 後再改為 `false`。
 

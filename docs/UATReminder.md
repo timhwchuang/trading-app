@@ -17,7 +17,6 @@ $env:SJ_SEC_KEY = "your_secret_key"
 $env:LOG_FILE = "C:\logs\theman-uat.log"   # 建議開啟（P4-2 每日輪替）
 # UAT 第一天：驗證委託回報欄位
 $env:DUMP_ORDER_EVENTS = "1"
-$env:PYTHONPATH = "src"
 python src\man.py
 ```
 
@@ -30,7 +29,7 @@ python src\man.py
 
 1. `DUMP_ORDER_EVENTS=1` 跑一筆委託/成交 → 搜尋 `RAW_ORDER_EVT` 確認欄位名（P0-9）
 2. 確認啟動無 `無期貨帳號` 錯誤（P0-10）
-3. 收盤後：`python uat_report.py C:\logs\theman-uat.log`（P2-7）
+3. 收盤後：`python src\uat_report.py C:\logs\theman-uat.log`（P2-7）
 
 ---
 

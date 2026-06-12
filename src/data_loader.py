@@ -25,7 +25,8 @@ from typing import Any, Iterable, Iterator, List, Optional
 logger = logging.getLogger(__name__)
 
 TAIWAN_TZ = datetime.timezone(datetime.timedelta(hours=8))
-DEFAULT_CACHE_DIR = Path(__file__).resolve().parent / "tick_cache"
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_CACHE_DIR = _PROJECT_ROOT / "tick_cache"
 
 _CSV_FIELDS = [
     "datetime",

@@ -20,6 +20,9 @@ htmlcov/
 *.log
 logs/
 
+# Backtest tick CSV cache (project root; see data_loader.DEFAULT_CACHE_DIR)
+tick_cache/
+
 # Secrets & certificates (use env vars: SJ_API_KEY, SJ_CA_PATH, etc.)
 .env
 .env.*

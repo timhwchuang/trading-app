@@ -332,7 +332,7 @@
 
 - [x] **P2-7 秒停損率量化（UAT / Pilot 硬指標）**
   - 已落地：`uat_report.py` 解析 log 中 `SIGNAL_AUDIT` + `MOMENTUM` 行。
-  - 用法：`python uat_report.py C:\logs\theman-uat.log`（`--json` / `--quick-sl-sec 5`）
+  - 用法：`python src\uat_report.py C:\logs\theman-uat.log`（`--json` / `--quick-sl-sec 5`）
   - 輸出：動量觸發數、進場數、轉換率、秒停損筆數與比例、出場 reason 分布
   - Pilot 通過標準：**秒停損率趨近 0**（比成交率更重要）；偏高則觸發 P1-6
 

@@ -13,7 +13,7 @@
 >    * `strategy._maybe_refresh_atr`（回測改 no-op；ATR 改由引擎同步刷新，見 7.1）
 > 3. 不可引入 `pandas` / `numpy`，只用 Python 標準庫。
 > 4. 不可使用 `time.time()` / `datetime.now()` / `date.today()`。時間一律來自 `tick.datetime`。
-> 5. 每個 Phase 完成後，`python -m unittest discover -p "test_*.py"` 必須全綠（目前 93 項）。
+> 5. 每個 Phase 完成後，`python run_tests.py` 必須全綠（目前 93 項）。
 
 ---
 
@@ -261,7 +261,7 @@ def normalize_audit_for_hash(label: str, json_part: str) -> str:
 5. `test_determinism.py::test_hash_robust_to_key_order`（6.8）：key 順序打亂後 hash 不變。
 6. `test_determinism.py::test_hash_ignores_operational_wall_clock`（7.5）：僅
    `lock_wait_max_ms` 不同時 hash 不變。
-7. 人工核對：回測 log 跑 `python uat_report.py <log>`，指標語意與實盤一致。
+7. 人工核對：回測 log 跑 `python src/uat_report.py <log>`，指標語意與實盤一致。
 
 ---
 
@@ -570,7 +570,7 @@ if half_spread is not None:
 
 ## 總驗收清單（Definition of Done）
 
-* [x] 每個 Phase 的 `test_*.py` 全部通過；`unittest discover` 全綠（**93 項**，含既有 69 項）。
+* [x] 每個 Phase 的 `tests/test_*.py` 全部通過；`python run_tests.py` 全綠（**93 項**，含既有 69 項）。
 * [x] 回測 log 能直接被 `uat_report.py` 解析，指標語意與實盤一致。
 * [x] 同資料連跑 3 次 SHA-256 一致（含**有 K 線 + 有 FILL** 路徑，7.6）。
 * [x] `man.py` 決策邏輯零改動（`git diff man.py` 為空；僅引擎注入 `_maybe_refresh_atr`）。

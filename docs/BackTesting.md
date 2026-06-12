@@ -1,7 +1,7 @@
 # Micro TAIEX VWAP 策略：UAT 回測規格書（同構性 / 確定性 / 啟發式執行）
 
-> 本文件已對照實際專案（`man.py:VWAPMomentumStrategy`、`observability.py`、
-> `exchange_time.py`、`config.py`、`uat_report.py`）與 Shioaji `_core.pyi` 修訂。
+> 本文件已對照實際專案（`src/man.py:VWAPMomentumStrategy`、`src/observability.py`、
+> `src/exchange_time.py`、`src/config.py`、`src/uat_report.py`）與 Shioaji `_core.pyi` 修訂。
 > 目標：在 UAT 期間能用歷史 tick 重放回測本策略，產出與生產環境 **語意一致** 的
 > KPI（進場轉換率、秒停損率、滑價、期望值），作為進 Pilot 前的相對調參工具。
 
@@ -43,14 +43,18 @@
 
 ```
 theman/
-├── config.py            # 參數快照（yaml + 環境變數）
-├── exchange_time.py     # 交易所時間 helper（純函式，實盤回測共用）
-├── signal_audit.py      # SIGNAL_AUDIT dataclass
-├── observability.py     # FILL_AUDIT / DAILY_SUMMARY / near-miss（實盤回測共用）
-├── man.py               # 策略狀態機 + 實盤進入點（api/clock 可注入）
-├── data_loader.py       # ★ Phase 0：歷史 tick 抓取 + 本地 CSV 快取
-├── backtester.py        # ☐ Phase 2：單執行緒 tick 重放引擎（待實作）
-└── uat_report.py        # 日終指標解析（實盤回測共用）
+├── config/config.yaml   # 策略參數（yaml；密鑰走 env）
+├── src/
+│   ├── config.py        # 參數快照（yaml + 環境變數）
+│   ├── exchange_time.py # 交易所時間 helper（純函式，實盤回測共用）
+│   ├── signal_audit.py  # SIGNAL_AUDIT dataclass
+│   ├── observability.py # FILL_AUDIT / DAILY_SUMMARY / near-miss（實盤回測共用）
+│   ├── man.py           # 策略狀態機 + 實盤進入點（api/clock 可注入）
+│   ├── data_loader.py   # ★ Phase 0：歷史 tick 抓取 + 本地 CSV 快取
+│   ├── backtester.py    # Phase 2：單執行緒 tick 重放引擎
+│   └── uat_report.py    # 日終指標解析（實盤回測共用）
+├── tests/               # 單元測試（`python run_tests.py`）
+└── tick_cache/          # 回測 tick CSV 快取（專案根目錄）
 ```
 
 > 不採用 big-bang 改寫成 `strategy.py` / `interfaces.py`。利用已存在的 `api`/`clock`
@@ -142,7 +146,7 @@ for tick in data_loader.iter_replay_ticks(code, dates):
 
 ## 6. 數據閉環與驗證
 
-* **uat_report 無縫相容**：回測輸出至 log 檔後，直接 `python uat_report.py <log>`，
+* **uat_report 無縫相容**：回測輸出至 log 檔後，直接 `python src/uat_report.py <log>`，
   其「動量→進場轉換率」、「秒停損率(<5s)」、滑價、期望值等指標語意必須與生產環境
   **完全相同**（因為走同一份 `observability` 與同樣的 FILL_AUDIT/SIGNAL_AUDIT 行）。
 * **確定性閘門（Determinism Gate）**：
