@@ -14,6 +14,9 @@
 | **Phase 3 UAT** | **⏸ 待 P0-11** — 見 [`docs/UATReminder.md`](docs/UATReminder.md)、[`docs/WeeklyStatus.md`](docs/WeeklyStatus.md) |
 | Phase 4 運維 | P4-1/2/5/6/8/9/10 完成；P4-3/4 Pilot 前 |
 | Phase 5 Pilot | 待 UAT 全過 + CA 憑證；**秒停損率（P2-7）為硬指標** |
+| **Phase 6 策略真實化** | **🔴 Live 前必補**（非 UAT gate）：P6-1 趨勢濾網（P0）/ P6-2 ATR Trailing（P1）/ P6-3 ATR VWAP 停損（P1）/ P6-4 風險口數（P2）/ P6-5 追價進場（P3）— 見 [`docs/CodeReview#2.md`](docs/CodeReview%232.md) |
+
+> **UAT Ready ≠ Live Ready**。工程體質（狀態機 / 對帳 / 觀測）已達 UAT 標準（Review #2 評 8.5/10）；但 **Phase 6 策略真實化是「進正式盤」的 gate，不是「進 UAT」的 gate**。UAT 仍依本檔核心原則：**驗狀態機與對帳，不是看績效**。Phase 6 須在 **UAT 收集到足夠 tick / SIGNAL_AUDIT 數據後**校準，禁止憑空調參上線。
 
 單元測試：`tests/test_*`（`python run_tests.py`；mock API，見 P2-8 `test_helpers.make_strategy`）
 
@@ -37,10 +40,52 @@
 | 委託回報欄位 | ⚠️ `status.status` / `deal_quantity` 可能不存在於 stub | **同意，UAT hard gate** → P0-9 |
 | ATR 語意 / kbars 流量 | ⚠️ 20 根 1 分 K = 20 分鐘 ATR；盤中重複抓 10 天 | **同意** → 註解修正 + P4-9 |
 | 策略：VWAP-3 停損 | 🔴 進場在 VWAP 附近 → 有效 SL ≈ 3 點 | **同意，與 IOC±3 同類陷阱** → P1-6 / P2-7 |
-| 策略：進場條件 | 🟠 動量後等 pullback 到 VWAP，次數少、邏輯張力 | **設計取捨，非 bug**；用 SIGNAL_AUDIT 量化 |
+| 策略：進場條件 | 🟠 動量後等 pullback 到 VWAP，次數少、邏輯張力 | **UAT 階段視為設計取捨，非 bug**；用 SIGNAL_AUDIT 量化。**Review #2 進一步指出**：`near_vwap + exhausted` 雙條件在強勢單邊趨勢中等不到量縮回踩 → 錯過主升段 → 見 P6-1 趨勢濾網 + P6-5 追價進場 |
 | `dynamic_threshold` | 0.0001 × 20000 ≈ 2，動態項無效 | **同意** → P1-7（可選） |
 | 命名：VWAP | 實為 5 分鐘滾動 VWMA，會跟價漂移 | **文件化**；停損跟漂加劇 P1-6 |
 | `daily_pnl` | 毛點數，未扣費稅滑價 | Pilot 對帳時以券商為準 |
+
+---
+
+## 外部 Code Review #2 — 策略升級評估（2026-06-12）
+
+> 主題：**工程已達 UAT 體質，但「交易邏輯」仍是 prototype**。Review #2 的重點不在系統穩定性（那塊已給 8.5/10、UAT Ready = 是），而在「這套進出場邏輯放進真實血淋淋戰場會被巴成什麼樣」。
+
+### 結論
+
+| 項目 | 評價 |
+| ---- | ---- |
+| 程式品質（工程面） | **8.5 / 10** |
+| UAT Ready | **是**（驗狀態機 / 對帳 / 觀測，不看績效） |
+| Live / 正式盤 Ready | **否** — 須先補 P6-1（P0）、P6-2 / P6-3（P1） |
+
+> Reviewer 原話：補上趨勢濾網 + ATR 動態 trailing / VWAP 停損後，「這其實已經是**新策略**，不是修策略」。因此另闢 **Phase 6**，與既有 Phase 0–5 的「修 prototype bug / 上 UAT」明確區隔。
+
+### 三大核心診斷
+
+| # | 診斷 | 根因（對應現行碼） | 對策 |
+| - | ---- | ------------------ | ---- |
+| 1 | **進場過於嚴苛 → 與大波段無緣** | `process_strategy` 要求 `near_vwap and exhausted` 同時成立（`man.py:843-852`）。強勢單邊量能持續高企，永遠等不到 `vol_1s <= EXHAUSTION_VOL` 的量縮回踩 | **P6-1** 趨勢濾網（順勢才做）＋ **P6-5** 趨勢追價進場（第二套進場，不等回踩） |
+| 2 | **停損 / 停利未與 ATR 連動（最諷刺）** | 已有 `refresh_atr()` 且 `current_atr` 用於量能門檻 `_vol_threshold`（`man.py:492`），卻在價格停損用固定 `HARD_STOP_POINTS` / `VWAP_STOP_POINTS` / `TRAIL_POINTS`（`man.py:913-917`、`932/952`）。波動大時固定點數易被掃，波動小時又讓出過多回撤 | **P6-2** `TRAIL_POINTS → ATR×k`、**P6-3** `VWAP_STOP_POINTS → current_vwap ± ATR×k` |
+| 3 | **缺乏大週期趨勢濾網（Macro Blindness）** | 微觀量能只看 1 秒窗口（`vol_1s`），無更高時間框架定義「當日主趨勢」 → 盤整盤被來回雙巴、連續止損 | **P6-1** 5m / 15m EMA 或 VWAP slope filter |
+
+### Reviewer 優先級（→ 映射到本檔 Phase 6 ID）
+
+| Reviewer 優先級 | 項目 | 本檔 ID |
+| --------------- | ---- | ------- |
+| **P0** | Trend Filter（5m EMA / VWAP slope） | **P6-1** |
+| **P1** | ATR Trailing（`TRAIL_POINTS → ATR×k`） | **P6-2** |
+| **P1** | ATR VWAP Stop（`VWAP_STOP_POINTS → ATR×k`） | **P6-3** |
+| **P2** | Position Sizing（Risk based / 1% 法則） | **P6-4** |
+| **P3** | 第二套追價進場（Trend Entry） | **P6-5** |
+
+> Reviewer 明確強調：**P6-1 / P6-2 / P6-3 對績效的影響遠大於 Position Sizing（P6-4）**。Position sizing 是「贏了之後賺更多」，趨勢濾網是「先不要一直輸」。
+
+### 與既有 TODO 的關係（避免重工）
+
+- **P1-4（SL/TP 與 ATR 掛鉤，原標可選）**：與 P6-2 / P6-3 重疊，**正式由 Phase 6 接手並升級**；P1-4 保留為歷史脈絡，實作以 P6-2 / P6-3 為準。
+- **P1-6（進場保護期停損解耦）**：保護期內仍只看硬停損的設計不變；P6-3 只改「保護期結束後」VWAP 停損的點數來源（固定 → ATR 動態）。
+- **核心原則不變**：Phase 6 屬 **Live 前** gate，**不阻擋 UAT**。且須以 **P0-11 累積的 tick + P2-7 / SIGNAL_AUDIT 數據** 校準 `k` 係數，不憑感覺設參數。
 
 ---
 
@@ -306,11 +351,12 @@
   - 方案：UAT 期間以 `LOG_LEVEL=DEBUG` 統計 `tick_type` 分布；若 0 佔比高，考慮改用 Shioaji 原生欄位或降低依賴。
   - 驗收：開盤 30 分鐘統計 type 0/1/2 比例。
 
-- [ ] **P1-4 SL/TP 與 ATR 掛鉤（可選）**
+- [ ] **P1-4 SL/TP 與 ATR 掛鉤（可選）** — ⤴ **已由 Phase 6（P6-2 / P6-3）接手升級**
   - 問題：進場用 ATR 濾鏡，出場卻固定 6/3/20 點。
   - 方案：例如 `sl_points = max(6, atr * 0.25)`，`tp_points = max(20, atr * 0.8)`。
   - 驗收：高低波動日風險報酬比趨於一致。
   - 備註：可與 **P1-6** 合併設計（VWAP 停損 + entry 停損成對調整）。
+  - **2026-06-12（Review #2）**：本項正式由 **P6-2（ATR Trailing）** + **P6-3（ATR VWAP 停損）** 取代並細化；此處保留歷史脈絡，實作以 Phase 6 為準。
 
 - [x] **P1-6 進場保護期停損解耦（核心）**
   - 已落地：`exit_grace_ticks=60`、`exit_grace_sec=30`；保護期內僅 `hard_stop_points`；之後 `vwap_stop_points` + 硬停損
@@ -514,6 +560,77 @@ UAT 通過標準：**每項有 log 證據 + 人工對帳一致**。
 
 ---
 
+## Phase 6 — 策略真實化（Live / 正式盤前必補）
+
+> 來源：[`docs/CodeReview#2.md`](docs/CodeReview%232.md)。**這是把 prototype 交易邏輯升級為「能進真實戰場」的新策略層**，不是修 bug。
+>
+> **Gate 定位**：
+> - **不阻擋 UAT**（UAT 驗狀態機 / 對帳，見核心原則）。
+> - **阻擋 Pilot / 正式盤**：P6-1（P0）、P6-2 / P6-3（P1）為 **Live hard gate**。
+> - **校準紀律**：所有 `k` 係數、EMA / slope 門檻一律以 **P0-11 累積 tick + UAT 期間 SIGNAL_AUDIT / P2-7 數據** 回測校準後才設定；**禁止憑感覺直接上線**。
+> - **回測前提**：依賴 P0-11 的 `tick_cache/` 與 [`docs/BackTestingSpec.md`](docs/BackTestingSpec.md) 重放管線；先有資料，再談調參。
+
+### 設計原則：先求不被巴死，再求賺更多
+
+進出場參數仍須**成對設計**（延續「進場滑價 vs 停損」紀律）。Phase 6 的順序刻意是 **濾網（少做爛單）→ 動態停損（控制每筆風險）→ 口數（放大已驗證的優勢）**，與 reviewer「趨勢濾網 ≫ position sizing」一致。
+
+- [ ] **P6-1 大週期趨勢濾網（Trend Filter）** — 🔴 **Live hard gate（Reviewer P0）**
+  - 問題：策略只看 1 秒微觀量能（`vol_1s`），無「當日主趨勢」概念 → 盤整盤被來回雙巴、連續止損；強勢單邊又因等不到量縮 pullback 而錯過（見 Review #2 診斷 1、3）。
+  - 方案（擇一或並用，UAT 數據定案）：
+    - **A) 高時間框架 EMA**：用 5m（或 15m）K 線 EMA，價格在 EMA 上方僅做多、下方僅做空。
+    - **B) VWAP Slope**：以日內錨定 VWAP（或現行 5m VWMA）斜率（近 N 分鐘變化率）定義趨勢方向與強度門檻。
+  - 與現行碼整合點：
+    - 趨勢方向作為 `process_strategy` 進場**前置濾網**——只允許與主趨勢同向的 `activate_momentum`（`man.py:808-834`）。
+    - K 線來源沿用 `refresh_atr` 的 kbars 管線（`man.py:454`），**遵守 P4-9 流量控管**（盤中抓當日 K、不重複拉歷史）；趨勢指標與 ATR 同一次 refresh 計算，避免額外 API 呼叫。
+    - 時間源沿用 tick 時間（P0-6），禁止 `datetime.now()`。
+  - 新增參數（`config.yaml` → `strategy`，初值待校準）：
+    - `trend_filter_enabled`、`trend_timeframe_min`（5 / 15）、`trend_ema_period`、`trend_mode`（`ema` / `vwap_slope`）、`vwap_slope_min`
+  - 觀測：SIGNAL_AUDIT 增加 `trend_dir` / `trend_strength` 欄位，UAT 統計「逆勢被濾掉的訊號數」與「濾網開 / 關的秒停損率差異」。
+  - 驗收：
+    - 盤整日：逆勢訊號被濾除，連續止損次數較濾網關閉時下降。
+    - 趨勢日：濾網不誤殺順勢主訊號。
+    - kbars 流量符合 P4-9（API usage 無暴增）。
+
+- [ ] **P6-2 ATR 動態 Trailing Stop** — 🟠 **Live gate（Reviewer P1）**
+  - 問題：`TRAIL_POINTS=8` 為固定值（`man.py:932`、`952`）。太緊在震盪中易被掃、太鬆失去保護；同一參數無法同時適配高 / 低波動日。
+  - 方案：`trail_points = max(TRAIL_POINTS_FLOOR, current_atr * trail_atr_k)`。
+    - 保留**地板值**（`TRAIL_POINTS_FLOOR`）避免 ATR 異常偏低時 trailing 過緊。
+    - `current_atr` 已存在（`man.py:211`、`473`），直接複用；ATR=0 / 未刷新時 fallback 地板值。
+  - 整合點：`manage_exit` 內 `trail_hit` 計算改用動態值（`man.py:932`、`952`）；`_update_trailing_peak` 不變。
+  - 新增參數：`trail_atr_k`、`trail_points_floor`（沿用現行 `trail_points` 作地板）。
+  - 觀測：exit audit 記錄當下 `trail_points_used` 與 `atr`，便於回測比較固定 vs 動態的 trailing_stop 出場分布。
+  - 驗收：高波動日 trailing 自動放寬（不被洗）、低波動日收緊（不讓利潤回吐）；trailing_stop reason 分布合理。
+
+- [ ] **P6-3 ATR 動態 VWAP 停損** — 🟠 **Live gate（Reviewer P1）**
+  - 問題：`VWAP_STOP_POINTS=3` 為固定值（`man.py:914`、`917`），在不同波動環境意義不同；過緊在 VWAP 進場時等同秒停損陷阱（坑十）。
+  - 方案：保護期結束後的 VWAP 停損改為 `current_vwap ± current_atr * vwap_stop_atr_k`（取代固定 `± VWAP_STOP_POINTS`）。
+    - 保留地板值避免 ATR 偏低時過緊；ATR=0 fallback 現行固定值。
+    - **不動 P1-6 保護期語意**：grace 期內仍只看 `HARD_STOP_POINTS`；本項只改保護期**結束後** `vwap_hit` 的點數來源（`man.py:914-917`、`_stop_loss_hit`）。
+  - 整合點：`_stop_loss_hit` 內 `vwap_hit` 計算（`man.py:909-926`）。
+  - 新增參數：`vwap_stop_atr_k`、`vwap_stop_points_floor`（沿用現行 `vwap_stop_points` 作地板）。
+  - 觀測：P2-7 持續追 `stop_loss` vs `stop_loss_vwap` 分布；驗證動態化後秒停損率不升反降。
+  - 驗收：與 P6-2 同日生效時，高 / 低波動日的有效停損緩衝隨 ATR 等比例縮放；秒停損率（P2-7 硬指標）維持趨近 0。
+  - **成對設計提醒**：P6-2 / P6-3 應同輪上線並一起回測；單獨改一個會破壞進出場參數對稱性（見「進場滑價 vs 停損」紀律）。
+
+- [ ] **P6-4 風險基準 Position Sizing（Risk-based）** — Reviewer P2（Live 後優化）
+  - 問題：目前固定 1 口（`OrderSignal(..., 1, ...)`，`man.py:857-872`、`941-965`）。
+  - 方案：依 **1% 風險法則**或 **ATR 換算**動態決定口數——`qty = floor(account_equity * risk_pct / (stop_distance * point_value))`。
+  - **強依賴 P2-1**：qty > 1 需先完成**部分成交追蹤**（`filled_qty` 累計、IOC 結束前不全解鎖、多口持倉管理），否則狀態機會在部分成交時失準。**P2-1 未完成前，P6-4 不得啟用 qty > 1。**
+  - 新增參數：`position_sizing_mode`（`fixed` / `risk_pct` / `atr`）、`risk_pct`、`max_contracts`、`account_equity`（或由 API 查詢）。
+  - 紀律：Pilot 第一天仍固定 1 口（見 Phase 5）；P6-4 是 UAT/Pilot 驗證策略有正期望值**之後**才放大，不是上線即開。
+  - 驗收：模擬不同 equity / ATR 下口數計算正確且受 `max_contracts` 上限保護；qty>1 路徑通過 P2-1 部分成交測試。
+
+- [ ] **P6-5 第二套追價進場（Trend Entry）** — Reviewer P3（選配，最後做）
+  - 問題：唯一進場路徑要求 `near_vwap and exhausted`（`man.py:843-852`），強勢趨勢中市場不給量縮回踩 → 完全錯過主升 / 主跌段。
+  - 方案：在 P6-1 趨勢濾網**確認強勢**時，啟用備選進場——
+    - **分批**：第一筆維持嚴格 pullback 條件；第二筆放寬（允許不回 VWAP 的追價）。
+    - **追價邏輯**：momentum 持續強勢（`vol_1s` 維持高檔、buy/sell ratio 維持）且順主趨勢 → 允許在離 VWAP 較遠處進場。
+  - 風險控管：追價進場的停損必須**對應放寬**（與 P6-2 / P6-3 ATR 動態停損連動），禁止用追價的遠進場價配固定 6 點 SL（否則進場即虧結構性緩衝，見「進場滑價 vs 停損」）。
+  - 前提：**P6-1 / P6-2 / P6-3 全部落地並回測通過後**才實作；否則只是放大暴露。
+  - 驗收：趨勢日追價進場能參與主波段；以回測比較「僅 pullback」vs「pullback + 追價」的期望值與最大回撤。
+
+---
+
 ## 建議實作順序
 
 ```
@@ -538,11 +655,19 @@ UAT 通過標準：**每項有 log 證據 + 人工對帳一致**。
   → Phase 4 運維（P4-0～P4-4、P4-6、P4-8、P4-9）
   → 依 P2-7 數據決定 P1-6（VWAP 停損校準）
     → Phase 5 Pilot（CA 憑證 + simulation: false，固定 1 口）
+
+— 以下為 Review #2 策略真實化（Live 前 gate，須先有 P0-11 tick 回測資料）—
+→ 🔴 P6-1 趨勢濾網（Reviewer P0，Live hard gate）
+→ 🟠 P6-2 ATR Trailing + P6-3 ATR VWAP 停損（Reviewer P1，成對同輪上線 + 回測）
+→ P6-4 風險口數（Reviewer P2；前置 P2-1 部分成交）
+→ P6-5 趨勢追價進場（Reviewer P3，選配，最後做）
 ```
 
 **Review #1 建議優先落地（不改交易邏輯）**：**P0-11** → P0-10 → P0-9（DEBUG dump）→ UAT 收 P2-7 數據 → 再動 P1-6
 
-UAT 後可選：P1-4、P2-1 部分成交、P2-2 lock 範圍縮小、P4-3 告警
+**Review #2（策略真實化，Live 前）**：P0-11 累積 tick → UAT 收 SIGNAL_AUDIT / P2-7 → 回測校準 → **P6-1（P0）→ P6-2 + P6-3（P1，成對）→ P6-4（P2）→ P6-5（P3）**。順序鐵律：**先濾網（少做爛單）→ 再動態停損（控每筆風險）→ 最後放大口數 / 追價**。
+
+UAT 後可選：~~P1-4~~（已併入 P6-2 / P6-3）、P2-1 部分成交（P6-4 前置）、P2-2 lock 範圍縮小、P4-3 告警
 
 ---
 
@@ -573,6 +698,25 @@ UAT 後可選：P1-4、P2-1 部分成交、P2-2 lock 範圍縮小、P4-3 告警
 | `EXIT_GRACE_SEC`          | 30     | 進場保護期秒數（P1-6）                            |
 | `NO_TICK_TIMEOUT_SEC`     | 45     | 看門狗無 tick 門檻（P4-8）                        |
 | `LOG_FILE`                | （空） | UAT 建議設 `C:\logs\theman-uat.log`               |
+
+### Phase 6 待新增參數（Live 前，回測校準後才設定）
+
+> 以下參數**尚未進 `config.yaml`**；待 Phase 6 各項實作時新增，初值一律以 P0-11 tick 回測校準，**禁止憑感覺設定**。
+
+| 參數                    | 對應項 | 用途                                              |
+| ----------------------- | ------ | ------------------------------------------------- |
+| `trend_filter_enabled`  | P6-1   | 趨勢濾網總開關                                    |
+| `trend_timeframe_min`   | P6-1   | 高時間框架（5 / 15 分）                           |
+| `trend_mode`            | P6-1   | `ema` / `vwap_slope`                              |
+| `trend_ema_period`      | P6-1   | EMA 週期（trend_mode=ema）                        |
+| `vwap_slope_min`        | P6-1   | VWAP 斜率門檻（trend_mode=vwap_slope）            |
+| `trail_atr_k`           | P6-2   | Trailing = `max(floor, atr × k)` 的 k             |
+| `trail_points_floor`    | P6-2   | Trailing 地板（沿用現行 `trail_points`）          |
+| `vwap_stop_atr_k`       | P6-3   | VWAP 停損 = `vwap ± atr × k` 的 k                 |
+| `vwap_stop_points_floor`| P6-3   | VWAP 停損地板（沿用現行 `vwap_stop_points`）      |
+| `position_sizing_mode`  | P6-4   | `fixed` / `risk_pct` / `atr`（前置 P2-1）         |
+| `risk_pct`              | P6-4   | 單筆風險佔權益比例（1% 法則）                     |
+| `max_contracts`         | P6-4   | 口數上限保護                                      |
 
 ### P1-2 未來優化（非 blocker）
 
@@ -610,3 +754,5 @@ UAT 後可選：P1-4、P2-1 部分成交、P2-2 lock 範圍縮小、P4-3 告警
 | 2026-06-10 | P0-3 peak 首 tick 校準；P0-8 trading_day 文件化；P2-1 部分成交防禦；P4-1 重連同步 |
 | 2026-06-12 | **P0-11** UAT 非同步 tick 落盤列為 UAT hard gate；回測改 UAT 累積、不批量下載歷史 |
 | 2026-06-12 | P0-11：盤中 plain CSV；gzip 改 rotate / 排程器壓縮（不盤中 streaming gzip） |
+| 2026-06-12 | **整合 [Code Review #2](docs/CodeReview%232.md)**：新增 Phase 6 策略真實化（P6-1～P6-5）；明確區分 UAT Ready vs Live Ready |
+| 2026-06-12 | Phase 6：P6-1 趨勢濾網（P0）/ P6-2 ATR Trailing / P6-3 ATR VWAP 停損（P1）/ P6-4 風險口數（P2）/ P6-5 追價進場（P3）；P1-4 併入 P6-2/3 |
