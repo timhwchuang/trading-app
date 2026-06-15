@@ -81,6 +81,12 @@ class Settings:
     sweep_dd_penalty: float
     sweep_sl_penalty: float
 
+    exit_order_max_retries: int
+    exit_order_retry_delay_sec: float
+    session_watchdog_sec: float
+    session_relogin_max_attempts: int
+    session_relogin_backoff_base_sec: float
+
     config_path: Path
 
 
@@ -100,6 +106,7 @@ def load_config(path: str | Path | None = None) -> Settings:
     logging_cfg = _section(raw, "logging")
     friction = _section(raw, "friction")
     performance = _section(raw, "performance")
+    operations = _section(raw, "operations")
 
     log_level = os.environ.get("LOG_LEVEL", logging_cfg.get("level", "INFO"))
     log_file = os.environ.get("LOG_FILE", logging_cfg.get("file", ""))
@@ -160,6 +167,17 @@ def load_config(path: str | Path | None = None) -> Settings:
         sweep_score_metric=str(performance.get("sweep_score_metric", "expectancy_net")),
         sweep_dd_penalty=float(performance.get("sweep_dd_penalty", 0.0)),
         sweep_sl_penalty=float(performance.get("sweep_sl_penalty", 50.0)),
+        exit_order_max_retries=int(operations.get("exit_order_max_retries", 3)),
+        exit_order_retry_delay_sec=float(
+            operations.get("exit_order_retry_delay_sec", 1.0)
+        ),
+        session_watchdog_sec=float(operations.get("session_watchdog_sec", 30.0)),
+        session_relogin_max_attempts=int(
+            operations.get("session_relogin_max_attempts", 5)
+        ),
+        session_relogin_backoff_base_sec=float(
+            operations.get("session_relogin_backoff_base_sec", 5.0)
+        ),
         config_path=config_path.resolve(),
     )
 
@@ -217,6 +235,11 @@ SHARPE_PERIOD = settings.sharpe_period
 SWEEP_SCORE_METRIC = settings.sweep_score_metric
 SWEEP_DD_PENALTY = settings.sweep_dd_penalty
 SWEEP_SL_PENALTY = settings.sweep_sl_penalty
+EXIT_ORDER_MAX_RETRIES = settings.exit_order_max_retries
+EXIT_ORDER_RETRY_DELAY_SEC = settings.exit_order_retry_delay_sec
+SESSION_WATCHDOG_SEC = settings.session_watchdog_sec
+SESSION_RELOGIN_MAX_ATTEMPTS = settings.session_relogin_max_attempts
+SESSION_RELOGIN_BACKOFF_BASE_SEC = settings.session_relogin_backoff_base_sec
 
 # 密鑰僅來自環境變數，不寫入 YAML
 API_KEY = os.environ.get("SJ_API_KEY", "YOUR_API_KEY")

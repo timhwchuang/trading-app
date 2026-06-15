@@ -147,3 +147,11 @@ performance:
   sweep_score_metric: expectancy_net  # expectancy_net | sharpe_net | pnl_net
   sweep_dd_penalty: 0.0
   sweep_sl_penalty: 50.0
+
+# P4-11 / P4-12：Live 防護網（不阻擋 UAT；mock 可測）
+operations:
+  exit_order_max_retries: 3
+  exit_order_retry_delay_sec: 1.0
+  session_watchdog_sec: 30.0
+  session_relogin_max_attempts: 5
+  session_relogin_backoff_base_sec: 5.0

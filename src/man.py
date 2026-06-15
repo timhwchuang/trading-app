@@ -28,6 +28,12 @@ from observability import (
 )
 from signal_audit import SignalAudit, format_signal_audit
 from tick_archiver import TickArchiver
+from order_errors import (
+    OrderErrorCategory,
+    classify_order_error,
+    should_retry_order,
+)
+from alerts import send_alert
 
 from config import (
     API_KEY,
@@ -43,6 +49,8 @@ from config import (
     CLOCK_SKEW_WARN_SEC,
     COOLDOWN_SEC,
     ENTRY_BAND_POINTS,
+    EXIT_ORDER_MAX_RETRIES,
+    EXIT_ORDER_RETRY_DELAY_SEC,
     EXHAUSTION_VOL,
     FIXED_TP_POINTS,
     EXIT_GRACE_SEC,
@@ -67,7 +75,10 @@ from config import (
     SESSION_END,
     SESSION_FLATTEN_TIME,
     SESSION_FORCE_FLATTEN_TIME,
+    SESSION_RELOGIN_BACKOFF_BASE_SEC,
+    SESSION_RELOGIN_MAX_ATTEMPTS,
     SESSION_START,
+    SESSION_WATCHDOG_SEC,
     SIMULATION,
     TRAIL_POINTS,
     VWAP_STOP_POINTS,
@@ -195,6 +206,12 @@ class VWAPMomentumStrategy:
         self.pending_ioc_slippage = IOC_SLIPPAGE_POINTS
         self._resynced_position = False   # sync_positions 後待首 tick 校準 trailing_peak
         self._api_connected = True
+        self._disconnect_since = 0.0
+        self._session_relogin_attempts = 0
+        self._next_relogin_at = 0.0
+        self._exit_order_retry_count = 0
+        self._exit_order_retry_at = 0.0
+        self._pending_action: Optional[str] = None
 
         # VWAP
         self.vwap_window: Deque[Tuple[int, float, int]] = deque()
@@ -613,6 +630,7 @@ class VWAPMomentumStrategy:
             if signal.slippage_points is not None
             else IOC_SLIPPAGE_POINTS
         )
+        self._pending_action = signal.action
         is_buy = signal.action == "Buy"
         self.pending_limit_price = compute_limit_price(
             signal.ref_price,
@@ -1022,6 +1040,8 @@ class VWAPMomentumStrategy:
                 self.pending_trade = trade
                 self.pending_order_id = str(trade.order.id)
                 self.pending_since = self._clock()
+                self._exit_order_retry_count = 0
+                self._exit_order_retry_at = 0.0
             logger.info(
                 "下單 %s %d 口 @ %.1f (%s) | trade=%s",
                 action,
@@ -1031,9 +1051,88 @@ class VWAPMomentumStrategy:
                 trade.order.id,
             )
         except Exception as e:
-            logger.error("下單失敗: %s", e)
+            self._handle_place_order_failure(signal, e)
+
+    def _handle_place_order_failure(
+        self, signal: OrderSignal, exc: Exception
+    ) -> None:
+        category = classify_order_error(exc)
+        intent = signal.intent
+        logger.error(
+            "下單失敗 | intent=%s category=%s err=%s",
+            intent,
+            category.value,
+            exc,
+        )
+
+        if intent == "entry":
             with self.lock:
                 self._clear_pending()
+            if category == OrderErrorCategory.FATAL:
+                send_alert(f"進場下單致命錯誤: {exc}", level="CRITICAL")
+            return
+
+        with self.lock:
+            attempt = self._exit_order_retry_count
+
+        if should_retry_order(
+            intent=intent,
+            category=category,
+            attempt=attempt,
+            max_retries=EXIT_ORDER_MAX_RETRIES,
+        ):
+            with self.lock:
+                self._exit_order_retry_count = attempt + 1
+                self._exit_order_retry_at = (
+                    self._clock() + EXIT_ORDER_RETRY_DELAY_SEC
+                )
+            logger.warning(
+                "出場下單將退避重試 | attempt=%d/%d delay=%.1fs",
+                attempt + 1,
+                EXIT_ORDER_MAX_RETRIES,
+                EXIT_ORDER_RETRY_DELAY_SEC,
+            )
+            return
+
+        send_alert(
+            f"出場下單失敗且重試耗盡 | category={category.value} err={exc}",
+            level="CRITICAL",
+        )
+        with self.lock:
+            self.block_new_entry = True
+        try:
+            self.sync_positions()
+        except Exception as sync_err:
+            logger.error("出場失敗後對帳異常: %s", sync_err)
+
+    def _reconstruct_pending_signal(self) -> Optional[OrderSignal]:
+        with self.lock:
+            if not self.is_pending or self.pending_intent != "exit":
+                return None
+            action = self._pending_action
+            if not action:
+                action = "Sell" if self.position_dir == "Long" else "Buy"
+            return OrderSignal(
+                action,
+                self.pending_qty or 1,
+                self.pending_signal_price,
+                "exit",
+                exchange_ts=self.pending_exchange_ts,
+                slippage_points=self.pending_ioc_slippage,
+            )
+
+    def _check_exit_order_retry(self) -> None:
+        with self.lock:
+            retry_at = self._exit_order_retry_at
+            if retry_at <= 0 or self._clock() < retry_at:
+                return
+            self._exit_order_retry_at = 0.0
+
+        signal = self._reconstruct_pending_signal()
+        if signal is None:
+            return
+        logger.info("出場下單退避重試觸發")
+        self.place_order(signal)
 
     def _maybe_dump_raw_order_event(self, stat, msg) -> None:
         if not DUMP_ORDER_EVENTS:
@@ -1359,17 +1458,84 @@ class VWAPMomentumStrategy:
                 "Pending 超時 %.0fs 且補查無結果，重置 pending",
                 PENDING_TIMEOUT_SEC,
             )
+            intent = self.pending_intent
             self._clear_pending()
+        if intent == "exit":
+            send_alert(
+                f"Pending 超時無回報（intent=exit）| timeout={PENDING_TIMEOUT_SEC}s",
+                level="CRITICAL",
+            )
+        try:
+            self.sync_positions()
+        except Exception as e:
+            logger.error("Pending 超時後對帳失敗: %s", e)
+        with self.lock:
+            self.block_new_entry = True
 
     def _timeout_loop(self):
         while self._running:
             try:
                 self._check_pending_timeout()
+                self._check_exit_order_retry()
+                self._check_session_watchdog()
                 self._check_no_tick_watchdog()
                 self._maybe_log_tick_type_summary()
             except Exception as e:
                 logger.warning("背景維運檢查異常: %s", e)
             time.sleep(1)
+
+    def _check_session_watchdog(self) -> None:
+        with self.lock:
+            if self._api_connected:
+                return
+            disconnected_since = self._disconnect_since
+            next_at = self._next_relogin_at
+            attempts = self._session_relogin_attempts
+
+        if disconnected_since <= 0:
+            return
+        now = self._clock()
+        if now < next_at:
+            return
+        if now - disconnected_since < SESSION_WATCHDOG_SEC:
+            return
+        if attempts >= SESSION_RELOGIN_MAX_ATTEMPTS:
+            send_alert(
+                f"Session 重登入已達上限 {SESSION_RELOGIN_MAX_ATTEMPTS}",
+                level="CRITICAL",
+            )
+            with self.lock:
+                self._next_relogin_at = now + 300.0
+            return
+
+        try:
+            logger.warning(
+                "Session 看門狗觸發重登入 | attempt=%d",
+                attempts + 1,
+            )
+            self.api.login(
+                api_key=API_KEY,
+                secret_key=SECRET_KEY,
+                subscribe_trade=True,
+            )
+            with self.lock:
+                self._session_relogin_attempts = 0
+                self._disconnect_since = 0.0
+                self._next_relogin_at = 0.0
+            self._on_reconnected()
+        except Exception as e:
+            backoff = SESSION_RELOGIN_BACKOFF_BASE_SEC * (2**attempts)
+            logger.error("Session 重登入失敗: %s | backoff=%.1fs", e, backoff)
+            send_alert(f"Session 重登入失敗: {e}", level="CRITICAL")
+            with self.lock:
+                self._session_relogin_attempts = attempts + 1
+                self._next_relogin_at = now + backoff
+
+    def _mark_disconnected(self) -> None:
+        with self.lock:
+            self._api_connected = False
+            if self._disconnect_since <= 0:
+                self._disconnect_since = self._clock()
 
     def _clear_pending(self):
         self.is_pending = False
@@ -1384,14 +1550,16 @@ class VWAPMomentumStrategy:
         self.pending_limit_price = 0.0
         self.pending_exit_reason = ""
         self.pending_ioc_slippage = IOC_SLIPPAGE_POINTS
+        self._pending_action = None
+        self._exit_order_retry_count = 0
+        self._exit_order_retry_at = 0.0
 
     def handle_session_event(
         self, resp_code: int, event_code: int, info: str, event: str
     ):
         if event_code == 12:
             logger.warning("API 重連中 | resp=%s info=%s", resp_code, info)
-            with self.lock:
-                self._api_connected = False
+            self._mark_disconnected()
         elif event_code == 13:
             logger.info("API 重連成功 | resp=%s", resp_code)
             threading.Thread(
@@ -1400,8 +1568,7 @@ class VWAPMomentumStrategy:
 
     def handle_session_down(self):
         logger.warning("API 連線中斷")
-        with self.lock:
-            self._api_connected = False
+        self._mark_disconnected()
 
     def _on_reconnected(self):
         """P4-1: 先補查 pending，再對帳持倉，最後重新訂閱。"""
@@ -1425,6 +1592,9 @@ class VWAPMomentumStrategy:
 
         with self.lock:
             self._api_connected = True
+            self._disconnect_since = 0.0
+            self._session_relogin_attempts = 0
+            self._next_relogin_at = 0.0
 
         logger.info("重連後狀態同步完成")
 
