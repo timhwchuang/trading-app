@@ -11,6 +11,7 @@
   - `SJ_API_KEY` / `SJ_SEC_KEY`
   - `LOG_FILE=C:\logs\theman-uat.log`
   - `TICK_ARCHIVE=1`（UAT 累積 tick）
+  - `KBARS_ARCHIVE=1`（UAT 累積 kbars，供回測 ATR 熱身）
   - 選配：`TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` 或 `ALERT_WEBHOOK_URL`
 - [ ] `C:\logs\` 目錄存在且執行帳號可寫入
 - [ ] 交易時段電腦不睡眠；Windows Update 主動時段延後

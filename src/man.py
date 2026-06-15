@@ -28,6 +28,7 @@ from observability import (
 )
 from signal_audit import SignalAudit, format_signal_audit
 from tick_archiver import TickArchiver
+from kbar_archiver import archive_kbars_snapshot
 from order_errors import (
     OrderErrorCategory,
     classify_order_error,
@@ -46,6 +47,7 @@ from config import (
     ATR_VWAP_STOP_ENABLED,
     API_KEY,
     DUMP_ORDER_EVENTS,
+    KBARS_ARCHIVE,
     TICK_ARCHIVE,
     ATR_KLINE_LOOKBACK_DAYS,
     ATR_PERIOD,
@@ -533,6 +535,15 @@ class VWAPMomentumStrategy:
                 lookback_label,
             )
             self._log_api_usage("atr_refresh")
+            if KBARS_ARCHIVE:
+                try:
+                    archive_kbars_snapshot(
+                        kbars,
+                        product_code=self.contract.code,
+                        trade_date=today,
+                    )
+                except Exception as arch_err:
+                    logger.warning("Kbars 落盤失敗: %s", arch_err)
         except Exception as e:
             logger.warning("ATR 更新失敗: %s", e)
 
