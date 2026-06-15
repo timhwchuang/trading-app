@@ -17,11 +17,14 @@ $env:SJ_SEC_KEY = "your_secret_key"
 $env:LOG_FILE = "C:\logs\theman-uat.log"   # 建議開啟（P4-2 每日輪替）
 # UAT 第一天：tick 落盤（P0-11，hard gate）+ 委託回報欄位
 $env:TICK_ARCHIVE = "1"
+# 選配：kbars 落盤（ATR / 趨勢濾網回測熱身，P0-11 follow-up）
+$env:KBARS_ARCHIVE = "1"
 $env:DUMP_ORDER_EVENTS = "1"
 python src\man.py
 ```
 
 - [x] **P0-11** 已實作；`TICK_ARCHIVE=1` 盤中寫入 `tick_cache/*.csv`；log 見 `Tick 落盤已啟用`
+- [x] **kbars 落盤**（選配）：`KBARS_ARCHIVE=1` → `tick_cache/{code}_kbars_{date}.csv`（`refresh_atr` 後）
 - [ ] 收盤後 rotate 或排程器產出 `*.csv.gz`（見下方排程器）
 - [ ] `config/config.yaml` 中 `simulation: true`
 - [ ] 系統時區為台北 (UTC+8)
@@ -34,7 +37,7 @@ python src\man.py
 2. 收盤後：`python src\compress_tick_cache.py`（**預設排除當日**；僅壓歷史 plain 檔）→ 確認 `*.csv.gz` 可 `iter_replay_ticks` 重放
 3. `DUMP_ORDER_EVENTS=1` 跑一筆委託/成交 → 搜尋 `RAW_ORDER_EVT` 確認欄位名（P0-9）
 4. 確認啟動無 `無期貨帳號` 錯誤（P0-10）
-5. 收盤後：`python src\uat_report.py C:\logs\theman-uat.log`（P2-7）
+5. 收盤後：`python src\uat_report.py C:\logs\theman-uat.log`（P2-7；含 **生存指標** 區塊，績效僅供觀測、非 UAT gate）
 
 ### 收盤後 tick 壓縮（工作排程器建議 15:30 / 16:00）
 
@@ -183,9 +186,9 @@ signal 產生後、下單前已在 lock 內設 `is_pending`，開盤高頻 tick 
 - 重連：log `重連後狀態同步完成`（順序：pending 補查 → 對帳 → subscribe → ATR）
 
 ### 尚未納入本次 UAT blocker（可後補）
-- **P0-11 選配** kbars 日終落盤（Phase 6 回測前）
 - **P2-1** 部分成交（qty=1 暫不顯性）
-- **P1-4** SL/TP 與 ATR 掛鉤（可選優化；已併入 Phase 6）
+- **P1-4** SL/TP 與 ATR 掛鉤（已併入 Phase 6 骨架；旗標預設關）
+- **P4-11 / P4-12 / P4-3 告警**：程式已落地 + 單元測試；UAT 不測，**Pilot 前**建議斷網 / Telegram 實機驗收（見 [`WindowsOps.md`](WindowsOps.md)）
 
 ---
 
@@ -195,5 +198,7 @@ signal 產生後、下單前已在 lock 內設 `is_pending`，開盤高頻 tick 
 
 1. 設定 `SJ_CA_PATH` / `SJ_CA_PASSWD`
 2. `config/config.yaml` → `simulation: false`
-3. 固定 **1 口**，連續 2-4 週只觀察不調參
-4. 重點審計 08:45-09:15 滑價與 `intent_cancelled` 率
+3. 選配告警：`TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID`（見 [`WindowsOps.md`](WindowsOps.md)）
+4. 固定 **1 口**，連續 2-4 週只觀察不調參
+5. 重點審計 08:45-09:15 滑價與 `intent_cancelled` 率
+6. 以 **net 生存指標**（`friction_enabled: true`）判斷是否值得繼續；毛點數僅供對照

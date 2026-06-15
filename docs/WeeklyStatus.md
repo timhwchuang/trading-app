@@ -34,9 +34,43 @@
 | **申請永豐 API** | 目前 **0 權限**。模擬 UAT 建議勾：**行情/資料** + **帳務** + **交易**（不必勾正式環境、UAT 不需 CA）。 |
 | **UAT 累積 tick，取代大量下載歷史** | 決策：**不再**用 API 批量抓過往 tick。改在 **UAT 模擬盤中每日落盤 tick** → 累積成 `tick_cache/`，作為日後回測資料。優點：格式與實盤一致、零額外流量；缺點：回測樣本從 UAT 起跑日才開始累積。 |
 | **P0-11 UAT tick 落盤** | ✅ 已實作（`TICK_ARCHIVE=1`）。盤中非同步 `*.csv`；gzip 由跨日 rotate 或 `compress_tick_cache`（**預設排除當日**）→ `*.csv.gz`。 |
-| **回測 K 線（ATR）** | P0-11 選配 follow-up：日終 kbars 落盤尚未做；Phase 6 回測前再補。 |
+| **回測 K 線（ATR）** | ✅ `KBARS_ARCHIVE=1` → `kbar_archiver.py` 寫 `tick_cache/{code}_kbars_{date}.csv`（`refresh_atr` 後）；UAT 建議一併開啟。 |
+| **Live 防護網** | ✅ P4-11 / P4-12 / P4-3 骨架已落地（單元測試）；Pilot 前手動斷網 / Telegram 實機驗收。 |
+| **Phase 6 骨架** | ✅ P6-6 生存指標 + P6-1～3 旗標預設關；**UAT 回測校準 k 後才開**。 |
 | **Phase 3 UAT** | **可開跑**（待永豐模擬 API）；見 [`UATReminder.md`](UATReminder.md)。驗狀態機，不驗獲利。 |
 | **Pilot 門檻** | UAT 全過 + CA + `simulation: false`；**P2-7 秒停損率**為硬指標。 |
+
+---
+
+### 2026-06-15（週次 2 — Pre-UAT 工程批次 + review 收尾）
+
+**目前進度**
+
+- **P6-6** 生存指標 + 摩擦成本（`performance_metrics.py`、`uat_report` 生存指標、`param_sweep` 風險調整排序）。
+- **P4-11 / P4-12** Live 防護網：`order_errors.py`、exit 退避重試、session watchdog；**P4-3** 告警改非同步 queue（不阻塞 callback）。
+- **P4-0 / P4-3 / P4-4** Windows 運維：`docs/WindowsOps.md`、`scripts/windows/*.ps1`。
+- **P6-1～P6-3** 策略骨架（旗標預設關）：趨勢濾網 `compute_trend`、ATR trailing / VWAP 停損。
+- **kbars 落盤**：`KBARS_ARCHIVE=1` + `kbar_archiver.py`。
+- `python run_tests.py` **133** 項全綠；分支 `feat/review-fixes` @ `1c3f677`。
+
+**人類必做（Follow-up）**
+
+- [ ] **申請永豐模擬 API 金鑰**（行情/資料 + 帳務 + 交易）
+- [ ] **Windows UAT 機**：`TICK_ARCHIVE=1`、選配 `KBARS_ARCHIVE=1`、`LOG_FILE=C:\logs\theman-uat.log`
+- [ ] API 到手後 **UAT Day 1**（見 [`UATReminder.md`](UATReminder.md)）
+- [ ] 累積 2～4 週 tick 後：`uat_report.py` 看 **生存指標（net）** + `param_sweep` 校準 Phase 6 參數
+- [ ] Pilot 前：Telegram 告警實機測試、手動斷網驗 P4-12
+
+**Pending / 待決策**
+
+- [ ] Phase 6 旗標何時開（須回測數據支撐，非 UAT gate）
+- [ ] P6-4 風險口數 / P6-5 追價進場（Live 後段）
+- [ ] 摩擦成本 `round_trip_friction_points` 以券商實際費率校準（Pilot 前）
+
+**備註 / 開發日記**
+
+- UAT 仍驗狀態機；P4-11/12、P6 皆 **不阻擋 UAT 開跑**。
+- Review fix：MDD 權益曲線種子 0、跨日串接、determinism 三跑 hash 回歸已補。
 
 ---
 
@@ -56,8 +90,8 @@
 
 **Pending / 待決策**
 
-- [ ] **kbars 日終落盤**（P0-11 選配）— Phase 6 趨勢濾網回測前再補
-- [ ] P4-0 Windows 上線檢查清單、P4-3 告警、P4-4 進程守護 — Pilot 前再做
+- [ ] **kbars 日終落盤**（P0-11 選配）— ~~Phase 6 回測前再補~~ ✅ 已落地（`KBARS_ARCHIVE=1`）
+- [x] P4-0 Windows 上線檢查清單、P4-3 告警、P4-4 進程守護 — 見 [`WindowsOps.md`](WindowsOps.md)
 
 **備註 / 開發日記**
 
