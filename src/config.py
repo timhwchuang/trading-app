@@ -182,3 +182,6 @@ CA_PASSWD = os.environ.get("SJ_CA_PASSWD", "")
 
 _DUMP_ORDER_EVENTS = os.environ.get("DUMP_ORDER_EVENTS", "").strip().lower()
 DUMP_ORDER_EVENTS = _DUMP_ORDER_EVENTS in ("1", "true", "yes")
+
+_TICK_ARCHIVE = os.environ.get("TICK_ARCHIVE", "").strip().lower()
+TICK_ARCHIVE = _TICK_ARCHIVE in ("1", "true", "yes")

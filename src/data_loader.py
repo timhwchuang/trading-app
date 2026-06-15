@@ -17,10 +17,11 @@ from __future__ import annotations
 
 import csv
 import datetime
+import gzip
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Iterator, List, Optional
+from typing import Any, IO, Iterable, Iterator, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ TAIWAN_TZ = datetime.timezone(datetime.timedelta(hours=8))
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CACHE_DIR = _PROJECT_ROOT / "tick_cache"
 
-_CSV_FIELDS = [
+TICK_CSV_FIELDS = [
     "datetime",
     "close",
     "volume",
@@ -36,6 +37,7 @@ _CSV_FIELDS = [
     "ask_price",
     "tick_type",
 ]
+_CSV_FIELDS = TICK_CSV_FIELDS
 
 
 @dataclass
@@ -94,6 +96,30 @@ def cache_path(cache_dir: Path, code: str, date: datetime.date) -> Path:
     return Path(cache_dir) / f"{code}_{date.isoformat()}.csv"
 
 
+def cache_gz_path(cache_dir: Path, code: str, date: datetime.date) -> Path:
+    return Path(cache_dir) / f"{code}_{date.isoformat()}.csv.gz"
+
+
+def resolve_tick_cache_path(
+    cache_dir: Path, code: str, date: datetime.date
+) -> Optional[Path]:
+    """Prefer ``*.csv.gz`` over plain ``*.csv`` when both exist."""
+    gz = cache_gz_path(cache_dir, code, date)
+    plain = cache_path(cache_dir, code, date)
+    if gz.is_file():
+        return gz
+    if plain.is_file():
+        return plain
+    return None
+
+
+def _open_tick_csv_reader(path: Path) -> IO[str]:
+    path = Path(path)
+    if path.suffix == ".gz" or path.name.endswith(".csv.gz"):
+        return gzip.open(path, "rt", encoding="utf-8", newline="")
+    return path.open("r", encoding="utf-8", newline="")
+
+
 def save_ticks_csv(ticks: Iterable[ReplayTick], path: Path) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
     count = 0
@@ -117,7 +143,7 @@ def save_ticks_csv(ticks: Iterable[ReplayTick], path: Path) -> int:
 
 def load_ticks_csv(path: Path) -> List[ReplayTick]:
     ticks: List[ReplayTick] = []
-    with Path(path).open("r", encoding="utf-8", newline="") as f:
+    with _open_tick_csv_reader(Path(path)) as f:
         for row in csv.DictReader(f):
             ticks.append(
                 ReplayTick(
@@ -191,9 +217,13 @@ def iter_replay_ticks(
 ) -> Iterator[ReplayTick]:
     """依日期序讀取本地快取並逐筆 yield（跨日 tick 連續輸出，驅動 P0-8 跨日重置）。"""
     for date in dates:
-        path = cache_path(cache_dir, code, date)
-        if not path.is_file():
-            logger.warning("快取缺檔，略過 %s", path.name)
+        path = resolve_tick_cache_path(cache_dir, code, date)
+        if path is None:
+            logger.warning(
+                "快取缺檔，略過 %s_%s",
+                code,
+                date.isoformat(),
+            )
             continue
         for tick in load_ticks_csv(path):
             yield tick

@@ -27,10 +27,12 @@ from observability import (
     format_fill_audit,
 )
 from signal_audit import SignalAudit, format_signal_audit
+from tick_archiver import TickArchiver
 
 from config import (
     API_KEY,
     DUMP_ORDER_EVENTS,
+    TICK_ARCHIVE,
     ATR_KLINE_LOOKBACK_DAYS,
     ATR_PERIOD,
     ATR_REFRESH_SEC,
@@ -225,6 +227,7 @@ class VWAPMomentumStrategy:
         self._last_no_tick_resubscribe_wall = 0.0
         self._pending_intent_cancel_exchange_dt: Optional[datetime.datetime] = None
         self._obs = DailyObservability()
+        self._tick_archiver: Optional[TickArchiver] = None
 
     def _activate_ca(self) -> None:
         """P4-10: 先無 person_id；失敗則以 env / 帳號 person_id 重試。"""
@@ -406,6 +409,9 @@ class VWAPMomentumStrategy:
     def on_tick(self, tick: TickFOPv1):
         ts, price, volume, tick_type = self._parse_tick(tick)
         self._record_tick_arrival(ts, tick.datetime, tick_type)
+
+        if self._tick_archiver is not None:
+            self._tick_archiver.enqueue_tick(tick, tick_type)
 
         if volume >= 20:
             logger.debug(
@@ -1437,6 +1443,14 @@ class VWAPMomentumStrategy:
 
         self.api.subscribe(self.contract, quote_type=sj.QuoteType.Tick)
 
+        if TICK_ARCHIVE:
+            self._tick_archiver = TickArchiver(self.contract.code)
+            self._tick_archiver.start()
+            logger.info(
+                "Tick 落盤已啟用 | TICK_ARCHIVE=1 | code=%s",
+                self.contract.code,
+            )
+
         logger.info(
             "VWAP Momentum 策略已啟動 | config=%s | ATR=%.2f | 模擬=%s",
             settings.config_path,
@@ -1453,6 +1467,8 @@ class VWAPMomentumStrategy:
             logger.info("策略手動停止")
         finally:
             self._running = False
+            if self._tick_archiver is not None:
+                self._tick_archiver.shutdown()
             if self._trading_date is not None:
                 self._emit_daily_summary(self._trading_date)
             self.api.logout()
