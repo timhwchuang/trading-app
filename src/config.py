@@ -68,6 +68,19 @@ class Settings:
     log_level: str
     log_file: str
 
+    friction_enabled: bool
+    friction_mode: str
+    round_trip_friction_points: float
+    commission_per_side_points: float
+    tax_per_exit_points: float
+    commission_per_side_ntd: float
+    friction_tax_rate: float
+    point_value_ntd: float
+    sharpe_period: str
+    sweep_score_metric: str
+    sweep_dd_penalty: float
+    sweep_sl_penalty: float
+
     config_path: Path
 
 
@@ -85,6 +98,8 @@ def load_config(path: str | Path | None = None) -> Settings:
     session = _section(raw, "session")
     opening = _section(raw, "opening_volume")
     logging_cfg = _section(raw, "logging")
+    friction = _section(raw, "friction")
+    performance = _section(raw, "performance")
 
     log_level = os.environ.get("LOG_LEVEL", logging_cfg.get("level", "INFO"))
     log_file = os.environ.get("LOG_FILE", logging_cfg.get("file", ""))
@@ -129,6 +144,22 @@ def load_config(path: str | Path | None = None) -> Settings:
         open_mult_normal=float(opening.get("mult_normal", 1.0)),
         log_level=str(log_level).upper(),
         log_file=str(log_file or ""),
+        friction_enabled=bool(friction.get("enabled", False)),
+        friction_mode=str(friction.get("mode", "flat_round_trip")),
+        round_trip_friction_points=float(
+            friction.get("round_trip_friction_points", 2.0)
+        ),
+        commission_per_side_points=float(
+            friction.get("commission_per_side_points", 0.5)
+        ),
+        tax_per_exit_points=float(friction.get("tax_per_exit_points", 1.0)),
+        commission_per_side_ntd=float(friction.get("commission_per_side_ntd", 0.0)),
+        friction_tax_rate=float(friction.get("tax_rate", 0.0)),
+        point_value_ntd=float(friction.get("point_value_ntd", 10.0)),
+        sharpe_period=str(performance.get("sharpe_period", "per_trade")),
+        sweep_score_metric=str(performance.get("sweep_score_metric", "expectancy_net")),
+        sweep_dd_penalty=float(performance.get("sweep_dd_penalty", 0.0)),
+        sweep_sl_penalty=float(performance.get("sweep_sl_penalty", 50.0)),
         config_path=config_path.resolve(),
     )
 
@@ -173,6 +204,19 @@ OPEN_MULT_SPOT = settings.open_mult_spot
 OPEN_MULT_NORMAL = settings.open_mult_normal
 LOG_LEVEL = settings.log_level
 LOG_FILE = settings.log_file
+
+FRICTION_ENABLED = settings.friction_enabled
+FRICTION_MODE = settings.friction_mode
+ROUND_TRIP_FRICTION_POINTS = settings.round_trip_friction_points
+COMMISSION_PER_SIDE_POINTS = settings.commission_per_side_points
+TAX_PER_EXIT_POINTS = settings.tax_per_exit_points
+COMMISSION_PER_SIDE_NTD = settings.commission_per_side_ntd
+FRICTION_TAX_RATE = settings.friction_tax_rate
+POINT_VALUE_NTD = settings.point_value_ntd
+SHARPE_PERIOD = settings.sharpe_period
+SWEEP_SCORE_METRIC = settings.sweep_score_metric
+SWEEP_DD_PENALTY = settings.sweep_dd_penalty
+SWEEP_SL_PENALTY = settings.sweep_sl_penalty
 
 # 密鑰僅來自環境變數，不寫入 YAML
 API_KEY = os.environ.get("SJ_API_KEY", "YOUR_API_KEY")

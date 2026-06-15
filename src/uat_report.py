@@ -6,9 +6,14 @@ import argparse
 import json
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from observability import FillAudit
+from performance_metrics import (
+    FrictionSettings,
+    aggregate_daily_performance,
+    compute_performance_from_fills,
+)
 from signal_audit import SignalAudit
 
 MOMENTUM_TRIGGER_RE = re.compile(r"MOMENTUM (Long|Short) 突破")
@@ -205,6 +210,7 @@ def compute_metrics(
     lines: list[str],
     *,
     quick_sl_sec: int = 5,
+    friction: FrictionSettings | None = None,
 ) -> dict:
     momentum_triggers = count_momentum_triggers(lines)
     audits = [
@@ -264,6 +270,61 @@ def compute_metrics(
     if daily_summaries:
         near_miss = daily_summaries[-1].get("near_miss")
 
+    if friction is None:
+        try:
+            from config import (
+                COMMISSION_PER_SIDE_NTD,
+                COMMISSION_PER_SIDE_POINTS,
+                FRICTION_ENABLED,
+                FRICTION_MODE,
+                FRICTION_TAX_RATE,
+                POINT_VALUE_NTD,
+                ROUND_TRIP_FRICTION_POINTS,
+                SHARPE_PERIOD,
+                TAX_PER_EXIT_POINTS,
+            )
+
+            friction = FrictionSettings(
+                enabled=FRICTION_ENABLED,
+                mode=FRICTION_MODE,
+                round_trip_friction_points=ROUND_TRIP_FRICTION_POINTS,
+                commission_per_side_points=COMMISSION_PER_SIDE_POINTS,
+                tax_per_exit_points=TAX_PER_EXIT_POINTS,
+                commission_per_side_ntd=COMMISSION_PER_SIDE_NTD,
+                tax_rate=FRICTION_TAX_RATE,
+                point_value_ntd=POINT_VALUE_NTD,
+            )
+            sharpe_period = SHARPE_PERIOD
+        except Exception:
+            friction = FrictionSettings()
+            sharpe_period = "per_trade"
+    else:
+        try:
+            from config import SHARPE_PERIOD as sharpe_period
+        except Exception:
+            sharpe_period = "per_trade"
+
+    fill_dicts = [asdict(f) for f in fills]
+    performance = compute_performance_from_fills(
+        fill_dicts, friction, sharpe_period=sharpe_period
+    )
+    performance_aggregate = aggregate_daily_performance(daily_summaries)
+    if not performance_aggregate.get("trade_count") and performance.get("expectancy", {}).get(
+        "trade_count"
+    ):
+        performance_aggregate = {
+            "trade_count": performance["expectancy"]["trade_count"],
+            "total_pnl_gross": performance.get("total_pnl_gross", 0.0),
+            "total_pnl_net": performance.get("total_pnl_net", 0.0),
+            "win_rate": performance["expectancy"].get("win_rate"),
+            "expectancy_per_trade_net": performance["expectancy"].get(
+                "expectancy_per_trade_net"
+            ),
+            "max_drawdown_points": performance["drawdown"].get(
+                "max_drawdown_points"
+            ),
+        }
+
     return {
         "momentum_triggers": momentum_triggers,
         "entry_signals": len(entries),
@@ -282,6 +343,8 @@ def compute_metrics(
         "tick_type": tick_type,
         "near_miss": near_miss,
         "daily_summaries": daily_summaries,
+        "performance": performance,
+        "performance_aggregate": performance_aggregate,
         "fill_count": len(fills),
         "quick_stop_loss_examples": (
             [
@@ -439,12 +502,42 @@ def format_report(metrics: dict, *, quick_sl_sec: int = 5) -> str:
 
     exp = metrics.get("expectancy_by_reason", {})
     if exp:
-        lines.append("期望值 by exit_reason (點數):")
+        lines.append("期望值 by exit_reason (點數, gross):")
         for reason, stats in sorted(exp.items()):
             lines.append(
                 f"  {reason}: n={stats['count']} avg={stats['avg_pnl']} "
                 f"total={stats['total_pnl']}"
             )
+
+    perf = metrics.get("performance", {})
+    exp_all = perf.get("expectancy", {})
+    if exp_all.get("trade_count"):
+        lines.append("生存指標 (round-trip):")
+        wr = exp_all.get("win_rate")
+        wr_text = f"{wr:.1%}" if wr is not None else "N/A"
+        lines.append(
+            f"  筆數={exp_all['trade_count']} 勝率={wr_text} "
+            f"盈虧比={exp_all.get('payoff_ratio')}"
+        )
+        lines.append(
+            f"  期望值 gross={exp_all.get('expectancy_per_trade_gross')} "
+            f"net={exp_all.get('expectancy_per_trade_net')} "
+            f"(摩擦/筆={exp_all.get('friction_per_trade')})"
+        )
+        dd = perf.get("drawdown", {})
+        lines.append(
+            f"  最大回撤 net={dd.get('max_drawdown_points')} 點 "
+            f"({dd.get('max_drawdown_pct')}%)"
+        )
+        risk = perf.get("risk_adjusted", {})
+        lines.append(
+            f"  Sharpe={risk.get('sharpe')} Sortino={risk.get('sortino')} "
+            f"({risk.get('return_period')})"
+        )
+        lines.append(
+            f"  累計 PnL gross={perf.get('total_pnl_gross')} "
+            f"net={perf.get('total_pnl_net')}"
+        )
 
     cancel = metrics.get("intent_cancelled", {})
     if cancel.get("intent_cancelled"):

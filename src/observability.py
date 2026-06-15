@@ -13,6 +13,8 @@ from config import (
     ATR_REFRESH_SEC,
     ATR_VOL_MULT,
     BASE_VOL,
+    COMMISSION_PER_SIDE_NTD,
+    COMMISSION_PER_SIDE_POINTS,
     COOLDOWN_SEC,
     ENTRY_BAND_POINTS,
     EXHAUSTION_VOL,
@@ -20,6 +22,9 @@ from config import (
     EXIT_GRACE_TICKS,
     FIXED_TP_POINTS,
     FLATTEN_SLIPPAGE_POINTS,
+    FRICTION_ENABLED,
+    FRICTION_MODE,
+    FRICTION_TAX_RATE,
     HARD_STOP_POINTS,
     IOC_SLIPPAGE_POINTS,
     MAX_CONSECUTIVE_LOSS,
@@ -32,11 +37,20 @@ from config import (
     OPEN_MULT_NORMAL,
     OPEN_MULT_SPOT,
     PENDING_TIMEOUT_SEC,
+    POINT_VALUE_NTD,
     PRODUCT_CODE,
+    ROUND_TRIP_FRICTION_POINTS,
+    SHARPE_PERIOD,
     SIMULATION,
+    TAX_PER_EXIT_POINTS,
     TRAIL_POINTS,
     VWAP_STOP_POINTS,
     VWAP_WINDOW_MIN,
+)
+from performance_metrics import (
+    FrictionSettings,
+    aggregate_daily_performance,
+    compute_performance_from_fills,
 )
 
 
@@ -311,6 +325,19 @@ class DailyObservability:
             }
             for reason, v in self.pnl_by_reason.items()
         }
+        friction = FrictionSettings(
+            enabled=FRICTION_ENABLED,
+            mode=FRICTION_MODE,
+            round_trip_friction_points=ROUND_TRIP_FRICTION_POINTS,
+            commission_per_side_points=COMMISSION_PER_SIDE_POINTS,
+            tax_per_exit_points=TAX_PER_EXIT_POINTS,
+            commission_per_side_ntd=COMMISSION_PER_SIDE_NTD,
+            tax_rate=FRICTION_TAX_RATE,
+            point_value_ntd=POINT_VALUE_NTD,
+        )
+        performance = compute_performance_from_fills(
+            self.fills, friction, sharpe_period=SHARPE_PERIOD
+        )
         return {
             "date": trade_date,
             "params": build_config_snapshot(),
@@ -332,6 +359,7 @@ class DailyObservability:
                 "daily_pnl_points": self.daily_pnl,
                 "by_reason": pnl_by_reason,
             },
+            "performance": performance,
             "quick_stop_loss": {
                 "threshold_sec": quick_sl_sec,
                 "count": len(quick_sl),
@@ -413,6 +441,10 @@ def build_config_snapshot() -> dict[str, Any]:
         "open_mult_futures": OPEN_MULT_FUTURES,
         "open_mult_spot": OPEN_MULT_SPOT,
         "open_mult_normal": OPEN_MULT_NORMAL,
+        "friction_enabled": FRICTION_ENABLED,
+        "friction_mode": FRICTION_MODE,
+        "round_trip_friction_points": ROUND_TRIP_FRICTION_POINTS,
+        "sharpe_period": SHARPE_PERIOD,
     }
 
 

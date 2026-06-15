@@ -129,3 +129,21 @@ logging:
   # 日誌檔案路徑（Windows 例：C:\logs\theman.log）；空字串 = 僅輸出終端
   # 可被 LOG_FILE env 覆寫；磁碟 I/O 在背景 QueueListener 執行緒
   file: ""
+
+# P6-6：回測 / 報表摩擦成本（不影響下單決策；預設關閉保持向後相容）
+friction:
+  enabled: false
+  mode: flat_round_trip  # flat_round_trip | per_side | ntd
+  round_trip_friction_points: 2.0
+  commission_per_side_points: 0.5
+  tax_per_exit_points: 1.0
+  commission_per_side_ntd: 0.0
+  tax_rate: 0.0
+  point_value_ntd: 10.0  # 微台 1 點 = 10 NTD
+
+# P6-6：績效指標與 param_sweep 排序
+performance:
+  sharpe_period: per_trade  # per_trade | daily
+  sweep_score_metric: expectancy_net  # expectancy_net | sharpe_net | pnl_net
+  sweep_dd_penalty: 0.0
+  sweep_sl_penalty: 50.0

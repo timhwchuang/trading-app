@@ -12,8 +12,10 @@ import config
 import man
 import observability
 from backtester import BacktestEngine
+from config import SWEEP_DD_PENALTY, SWEEP_SCORE_METRIC, SWEEP_SL_PENALTY
 from data_loader import DEFAULT_CACHE_DIR
 from determinism_check import _AuditCaptureHandler
+from performance_metrics import aggregate_daily_performance, sweep_score_from_kpi
 
 DEFAULT_PENALTY = 50.0
 
@@ -78,6 +80,8 @@ def _aggregate_kpi(summaries: list[dict[str, Any]]) -> dict[str, Any]:
             "daily_pnl_points": 0.0,
             "quick_stop_loss_rate": None,
             "day_count": 0,
+            "performance_aggregate": aggregate_daily_performance([]),
+            "_summaries": [],
         }
     total_pnl = sum(
         float(s.get("pnl", {}).get("daily_pnl_points", 0.0)) for s in summaries
@@ -91,14 +95,26 @@ def _aggregate_kpi(summaries: list[dict[str, Any]]) -> dict[str, Any]:
     weighted_rate = (
         total_quick_sl / total_exits if total_exits > 0 else None
     )
-    return {
+    perf_agg = aggregate_daily_performance(summaries)
+    kpi = {
         "daily_pnl_points": round(total_pnl, 2),
         "quick_stop_loss_rate": weighted_rate,
         "day_count": len(summaries),
+        "performance_aggregate": perf_agg,
+        "_summaries": summaries,
     }
+    kpi["valid_score"] = sweep_score_from_kpi(
+        kpi,
+        metric=SWEEP_SCORE_METRIC,
+        dd_penalty=SWEEP_DD_PENALTY,
+        sl_penalty=SWEEP_SL_PENALTY,
+    )
+    return kpi
 
 
 def valid_score(valid_kpi: dict[str, Any], *, penalty: float = DEFAULT_PENALTY) -> float:
+    if "valid_score" in valid_kpi:
+        return float(valid_kpi["valid_score"])
     rate = valid_kpi.get("quick_stop_loss_rate") or 0.0
     return float(valid_kpi.get("daily_pnl_points", 0.0)) - penalty * rate
 
