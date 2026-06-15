@@ -126,35 +126,48 @@ def compute_expectancy_stats(
     }
 
 
-def compute_drawdown(cumulative_pnls: Sequence[float]) -> dict[str, Any]:
-    if not cumulative_pnls:
+def equity_curve_from_pnls(net_pnls: Sequence[float]) -> list[float]:
+    """Cumulative equity starting at 0 (before first trade)."""
+    equity: list[float] = [0.0]
+    running = 0.0
+    for p in net_pnls:
+        running = round(running + p, 4)
+        equity.append(running)
+    return equity
+
+
+def compute_drawdown(equity_curve: Sequence[float]) -> dict[str, Any]:
+    """Max drawdown on an equity curve that includes the starting balance (0)."""
+    if len(equity_curve) < 2:
         return {
             "max_drawdown_points": None,
             "max_drawdown_pct": None,
             "max_drawdown_duration_trades": None,
         }
 
-    peak = cumulative_pnls[0]
+    peak = equity_curve[0]
     max_dd = 0.0
-    dd_start_idx = 0
+    peak_at_max_dd = peak
     max_dd_duration = 0
-    current_dd_start: int | None = None
+    dd_start_idx: int | None = None
 
-    for i, equity in enumerate(cumulative_pnls):
+    for i, equity in enumerate(equity_curve):
         if equity > peak:
             peak = equity
-            current_dd_start = None
+            dd_start_idx = None
         drawdown = peak - equity
         if drawdown > max_dd:
             max_dd = drawdown
-            if current_dd_start is None:
-                current_dd_start = dd_start_idx
-            max_dd_duration = i - (current_dd_start or 0)
-        if equity < peak and current_dd_start is None:
-            current_dd_start = i
+            peak_at_max_dd = peak
+            if dd_start_idx is None:
+                dd_start_idx = i
+            max_dd_duration = i - dd_start_idx
+        if equity < peak and dd_start_idx is None:
             dd_start_idx = i
 
-    max_dd_pct = (max_dd / peak * 100.0) if peak > 0 else None
+    max_dd_pct = (
+        (max_dd / peak_at_max_dd * 100.0) if peak_at_max_dd > 0 else None
+    )
 
     return {
         "max_drawdown_points": round(max_dd, 4),
@@ -208,11 +221,7 @@ def compute_performance_from_fills(
     expectancy = compute_expectancy_stats(gross_pnls, friction_per_trade=fpt)
 
     net_pnls = [round(g - fpt, 4) for g in gross_pnls]
-    cumulative_net: list[float] = []
-    running = 0.0
-    for p in net_pnls:
-        running = round(running + p, 4)
-        cumulative_net.append(running)
+    cumulative_net = equity_curve_from_pnls(net_pnls)
 
     drawdown = compute_drawdown(cumulative_net)
     sharpe_src = net_pnls if sharpe_period == "per_trade" else gross_pnls
@@ -226,18 +235,19 @@ def compute_performance_from_fills(
         "risk_adjusted": risk_adj,
         "total_pnl_gross": round(sum(gross_pnls), 2) if gross_pnls else 0.0,
         "total_pnl_net": round(sum(net_pnls), 2) if net_pnls else 0.0,
+        "round_trip_net_pnls": net_pnls,
     }
 
 
 def aggregate_daily_performance(
     summaries: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
-    """Aggregate multi-day DAILY_SUMMARY performance blocks (sum PnL, weighted trades)."""
+    """Aggregate multi-day DAILY_SUMMARY performance blocks (sum PnL, chained MDD)."""
     total_gross = 0.0
     total_net = 0.0
     trade_count = 0
     win_count = 0
-    max_dd_points: float | None = None
+    all_net_pnls: list[float] = []
 
     for summary in summaries:
         perf = summary.get("performance") or {}
@@ -249,11 +259,20 @@ def aggregate_daily_performance(
         wr = exp.get("win_rate")
         if wr is not None and tc:
             win_count += int(round(float(wr) * tc))
-        dd = (perf.get("drawdown") or {}).get("max_drawdown_points")
-        if dd is not None:
-            max_dd_points = max(max_dd_points or 0.0, float(dd))
+        day_pnls = perf.get("round_trip_net_pnls")
+        if day_pnls:
+            all_net_pnls.extend(float(p) for p in day_pnls)
 
     win_rate = round(win_count / trade_count, 4) if trade_count else None
+
+    if all_net_pnls:
+        dd = compute_drawdown(equity_curve_from_pnls(all_net_pnls))
+        max_dd_points = dd["max_drawdown_points"]
+        max_dd_pct = dd["max_drawdown_pct"]
+    else:
+        max_dd_points = None
+        max_dd_pct = None
+
     return {
         "day_count": len(summaries),
         "trade_count": trade_count,
@@ -264,6 +283,7 @@ def aggregate_daily_performance(
             round(total_net / trade_count, 4) if trade_count else None
         ),
         "max_drawdown_points": max_dd_points,
+        "max_drawdown_pct": max_dd_pct,
     }
 
 

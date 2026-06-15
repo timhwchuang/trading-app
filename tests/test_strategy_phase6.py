@@ -5,11 +5,14 @@ from __future__ import annotations
 import unittest
 
 from strategy_phase6 import (
+    compute_trend,
     dynamic_trail_points,
     dynamic_vwap_stop_distance,
     ema,
+    resample_closes,
     trend_allows_entry,
     trend_from_ema,
+    trend_from_vwap_slope,
 )
 
 
@@ -35,6 +38,27 @@ class TestStrategyPhase6(unittest.TestCase):
                 enabled=True, trend_dir="Long", momentum_dir="Long"
             )
         )
+
+    def test_resample_closes_5m(self):
+        closes = [float(i) for i in range(10)]
+        self.assertEqual(resample_closes(closes, 5), [4.0, 9.0])
+
+    def test_compute_trend_ema_mode(self):
+        closes = [100.0 + i for i in range(60)]
+        direction, strength = compute_trend(
+            closes, mode="ema", timeframe_min=5, ema_period=10
+        )
+        self.assertEqual(direction, "Long")
+        self.assertGreater(strength, 0)
+
+    def test_compute_trend_vwap_slope_mode(self):
+        closes = [100.0 + i for i in range(30)]
+        direction, _ = compute_trend(
+            closes, mode="vwap_slope", timeframe_min=1, vwap_slope_min=0.1
+        )
+        self.assertEqual(direction, "Long")
+        flat, _ = trend_from_vwap_slope([100.0, 100.1], min_slope=1.0)
+        self.assertEqual(flat, "Flat")
 
     def test_dynamic_trail_floor(self):
         self.assertEqual(

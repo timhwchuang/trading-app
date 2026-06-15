@@ -22,6 +22,7 @@ class SignalAudit:
     reason: str = ""
     trend_dir: str = ""
     trend_strength: float = 0.0
+    trail_points_used: float = 0.0
 
 
 def format_signal_audit(audit: SignalAudit) -> str:

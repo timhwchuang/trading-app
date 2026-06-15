@@ -7,10 +7,12 @@ import unittest
 
 from performance_metrics import (
     FrictionSettings,
+    aggregate_daily_performance,
     compute_drawdown,
     compute_expectancy_stats,
     compute_performance_from_fills,
     compute_sharpe_sortino,
+    equity_curve_from_pnls,
     extract_round_trip_gross_pnls,
     friction_per_round_trip,
     sweep_score_from_kpi,
@@ -28,9 +30,40 @@ class TestPerformanceMetrics(unittest.TestCase):
         self.assertAlmostEqual(stats["expectancy_per_trade_net"], -0.25)
 
     def test_drawdown_known_curve(self):
-        cumulative = [5.0, 10.0, 3.0, 8.0]
-        dd = compute_drawdown(cumulative)
+        equity = equity_curve_from_pnls([5.0, 5.0, -7.0, 5.0])
+        dd = compute_drawdown(equity)
         self.assertEqual(dd["max_drawdown_points"], 7.0)
+
+    def test_drawdown_seeded_at_zero_catches_opening_loss(self):
+        equity = equity_curve_from_pnls([-5.0, 10.0])
+        dd = compute_drawdown(equity)
+        self.assertEqual(dd["max_drawdown_points"], 5.0)
+
+    def test_drawdown_pct_uses_peak_at_drawdown(self):
+        equity = equity_curve_from_pnls([10.0, -8.0])
+        dd = compute_drawdown(equity)
+        self.assertEqual(dd["max_drawdown_points"], 8.0)
+        self.assertEqual(dd["max_drawdown_pct"], 80.0)
+
+    def test_aggregate_daily_chained_mdd(self):
+        day1 = {
+            "performance": {
+                "total_pnl_gross": 10.0,
+                "total_pnl_net": 8.0,
+                "expectancy": {"trade_count": 1, "win_rate": 1.0},
+                "round_trip_net_pnls": [8.0],
+            }
+        }
+        day2 = {
+            "performance": {
+                "total_pnl_gross": -15.0,
+                "total_pnl_net": -17.0,
+                "expectancy": {"trade_count": 1, "win_rate": 0.0},
+                "round_trip_net_pnls": [-17.0],
+            }
+        }
+        agg = aggregate_daily_performance([day1, day2])
+        self.assertEqual(agg["max_drawdown_points"], 17.0)
 
     def test_friction_flat_round_trip(self):
         f = FrictionSettings(enabled=True, round_trip_friction_points=2.5)

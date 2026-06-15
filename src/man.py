@@ -36,10 +36,10 @@ from order_errors import (
 )
 from alerts import send_alert
 from strategy_phase6 import (
+    compute_trend,
     dynamic_trail_points,
     dynamic_vwap_stop_distance,
     trend_allows_entry,
-    trend_from_ema,
 )
 
 from config import (
@@ -95,6 +95,9 @@ from config import (
     TRAIL_POINTS_FLOOR,
     TREND_EMA_PERIOD,
     TREND_FILTER_ENABLED,
+    TREND_MODE,
+    TREND_TIMEFRAME_MIN,
+    VWAP_SLOPE_MIN,
     VWAP_STOP_ATR_K,
     VWAP_STOP_POINTS,
     VWAP_STOP_POINTS_FLOOR,
@@ -513,8 +516,12 @@ class VWAPMomentumStrategy:
             trend_dir, trend_strength = self.trend_dir, self.trend_strength
             if TREND_FILTER_ENABLED:
                 closes = list(getattr(kbars, "Close", []) or [])
-                trend_dir, trend_strength = trend_from_ema(
-                    closes, TREND_EMA_PERIOD
+                trend_dir, trend_strength = compute_trend(
+                    closes,
+                    mode=TREND_MODE,
+                    timeframe_min=TREND_TIMEFRAME_MIN,
+                    ema_period=TREND_EMA_PERIOD,
+                    vwap_slope_min=VWAP_SLOPE_MIN,
                 )
             with self.lock:
                 self.current_atr = atr
@@ -710,7 +717,13 @@ class VWAPMomentumStrategy:
         )
 
     def _build_exit_audit(
-        self, price: float, ts: int, direction: str, reason: str
+        self,
+        price: float,
+        ts: int,
+        direction: str,
+        reason: str,
+        *,
+        trail_points_used: float = 0.0,
     ) -> SignalAudit:
         return SignalAudit(
             intent="exit",
@@ -720,6 +733,7 @@ class VWAPMomentumStrategy:
             atr=round(self.current_atr, 2),
             vwap=round(self.current_vwap, 1),
             reason=reason,
+            trail_points_used=round(trail_points_used, 2),
         )
 
     @staticmethod
@@ -1032,7 +1046,9 @@ class VWAPMomentumStrategy:
                     price,
                     "exit",
                     exchange_ts=ts,
-                    audit=self._build_exit_audit(price, ts, "Sell", reason),
+                    audit=self._build_exit_audit(
+                        price, ts, "Sell", reason, trail_points_used=trail_pts
+                    ),
                 )
         else:
             sl_hit, sl_reason = self._stop_loss_hit(price, ts, is_long=False)
@@ -1052,7 +1068,9 @@ class VWAPMomentumStrategy:
                     price,
                     "exit",
                     exchange_ts=ts,
-                    audit=self._build_exit_audit(price, ts, "Buy", reason),
+                    audit=self._build_exit_audit(
+                        price, ts, "Buy", reason, trail_points_used=trail_pts
+                    ),
                 )
         return None
 
@@ -1524,11 +1542,10 @@ class VWAPMomentumStrategy:
             )
             intent = self.pending_intent
             self._clear_pending()
-        if intent == "exit":
-            send_alert(
-                f"Pending 超時無回報（intent=exit）| timeout={PENDING_TIMEOUT_SEC}s",
-                level="CRITICAL",
-            )
+        send_alert(
+            f"Pending 超時無回報（intent={intent or 'unknown'}）| timeout={PENDING_TIMEOUT_SEC}s",
+            level="CRITICAL",
+        )
         try:
             self.sync_positions()
         except Exception as e:

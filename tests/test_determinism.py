@@ -222,6 +222,36 @@ class TestDeterminism(unittest.TestCase):
         metrics = compute_metrics(captured)
         self.assertGreater(metrics["fill_count"], 0)
 
+    def test_performance_in_daily_summary_hash_stable(self):
+        """P6-6 / TODO 7.6: performance block in DAILY_SUMMARY must be hash-stable."""
+        base = datetime.datetime(2026, 6, 12, 9, 0, 0)
+        ticks = [
+            ReplayTick(base, "18000", 1, 1),
+            ReplayTick(base.replace(second=1), "18000", 1, 1),
+        ]
+        date = datetime.date(2026, 6, 12)
+
+        def fake_replay(_code, _dates, cache_dir=None):
+            yield from ticks
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_dir = Path(tmp)
+            _seed_kbars_cache(cache_dir)
+            with patch("backtester.iter_replay_ticks", fake_replay):
+                with patch.object(
+                    VWAPMomentumStrategy,
+                    "process_strategy",
+                    _patched_entry_when_atr_ready(
+                        VWAPMomentumStrategy.process_strategy
+                    ),
+                ):
+                    hashes = [
+                        run_hash("TXFR1", [date], cache_dir=cache_dir)
+                        for _ in range(3)
+                    ]
+        self.assertEqual(hashes[0], hashes[1])
+        self.assertEqual(hashes[1], hashes[2])
+
 
 if __name__ == "__main__":
     unittest.main()

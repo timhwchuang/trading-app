@@ -54,7 +54,10 @@ class Settings:
     clock_skew_warn_sec: float
 
     trend_filter_enabled: bool
+    trend_timeframe_min: int
+    trend_mode: str
     trend_ema_period: int
+    vwap_slope_min: float
     trail_atr_k: float
     trail_points_floor: float
     vwap_stop_atr_k: float
@@ -147,7 +150,10 @@ def load_config(path: str | Path | None = None) -> Settings:
         no_tick_timeout_sec=int(strategy.get("no_tick_timeout_sec", 45)),
         clock_skew_warn_sec=float(strategy.get("clock_skew_warn_sec", 1.0)),
         trend_filter_enabled=bool(strategy.get("trend_filter_enabled", False)),
+        trend_timeframe_min=int(strategy.get("trend_timeframe_min", 5)),
+        trend_mode=str(strategy.get("trend_mode", "ema")),
         trend_ema_period=int(strategy.get("trend_ema_period", 20)),
+        vwap_slope_min=float(strategy.get("vwap_slope_min", 0.0)),
         trail_atr_k=float(strategy.get("trail_atr_k", 0.25)),
         trail_points_floor=float(
             strategy.get("trail_points_floor", strategy.get("trail_points", 8))
@@ -234,7 +240,10 @@ VWAP_STOP_POINTS = settings.vwap_stop_points
 NO_TICK_TIMEOUT_SEC = settings.no_tick_timeout_sec
 CLOCK_SKEW_WARN_SEC = settings.clock_skew_warn_sec
 TREND_FILTER_ENABLED = settings.trend_filter_enabled
+TREND_TIMEFRAME_MIN = settings.trend_timeframe_min
+TREND_MODE = settings.trend_mode
 TREND_EMA_PERIOD = settings.trend_ema_period
+VWAP_SLOPE_MIN = settings.vwap_slope_min
 TRAIL_ATR_K = settings.trail_atr_k
 TRAIL_POINTS_FLOOR = settings.trail_points_floor
 VWAP_STOP_ATR_K = settings.vwap_stop_atr_k

@@ -84,7 +84,10 @@ strategy:
 
   # --- Phase 6 策略真實化（預設關閉；有 UAT tick 後再校準 k）---
   trend_filter_enabled: false
+  trend_timeframe_min: 5
+  trend_mode: ema
   trend_ema_period: 20
+  vwap_slope_min: 0.0
   atr_trailing_enabled: false
   trail_atr_k: 0.25
   trail_points_floor: 8

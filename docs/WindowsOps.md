@@ -30,7 +30,7 @@
 觸發時機（已落地）：
 
 - 出場下單重試耗盡（CRITICAL）
-- Pending 超時無回報且 intent=exit（CRITICAL）
+- Pending 超時無回報（entry / exit，CRITICAL）
 - Session 重登入失敗 / 達上限（CRITICAL）
 - 進場致命拒單（CRITICAL）
 

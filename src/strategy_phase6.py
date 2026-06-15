@@ -15,6 +15,16 @@ def ema(values: Sequence[float], period: int) -> float | None:
     return ema_val
 
 
+def resample_closes(closes: Sequence[float], timeframe_min: int) -> list[float]:
+    """Downsample 1-minute closes to higher timeframe (last close per bucket)."""
+    if timeframe_min <= 1:
+        return list(closes)
+    out: list[float] = []
+    for i in range(timeframe_min - 1, len(closes), timeframe_min):
+        out.append(closes[i])
+    return out
+
+
 def trend_from_ema(closes: Sequence[float], period: int) -> tuple[str, float]:
     """Return (trend_dir, strength) where strength = last_close - ema."""
     if len(closes) < period:
@@ -31,6 +41,36 @@ def trend_from_ema(closes: Sequence[float], period: int) -> tuple[str, float]:
     return "Flat", 0.0
 
 
+def trend_from_vwap_slope(
+    closes: Sequence[float], min_slope: float
+) -> tuple[str, float]:
+    """Slope of resampled closes; strength = abs(slope) when above threshold."""
+    if len(closes) < 2:
+        return "Flat", 0.0
+    slope = (closes[-1] - closes[0]) / (len(closes) - 1)
+    strength = abs(round(slope, 2))
+    if slope > min_slope:
+        return "Long", strength
+    if slope < -min_slope:
+        return "Short", strength
+    return "Flat", 0.0
+
+
+def compute_trend(
+    closes: Sequence[float],
+    *,
+    mode: str = "ema",
+    timeframe_min: int = 5,
+    ema_period: int = 20,
+    vwap_slope_min: float = 0.0,
+) -> tuple[str, float]:
+    """High-timeframe trend from 1-minute closes."""
+    resampled = resample_closes(closes, timeframe_min)
+    if mode == "vwap_slope":
+        return trend_from_vwap_slope(resampled, vwap_slope_min)
+    return trend_from_ema(resampled, ema_period)
+
+
 def trend_allows_entry(
     *,
     enabled: bool,
@@ -42,7 +82,7 @@ def trend_allows_entry(
     return trend_dir == momentum_dir
 
 
-def dynamic_trail_points(
+def dynamic_atr_points(
     atr: float,
     *,
     floor: float,
@@ -51,6 +91,15 @@ def dynamic_trail_points(
     if atr <= 0:
         return floor
     return max(floor, round(atr * atr_k, 2))
+
+
+def dynamic_trail_points(
+    atr: float,
+    *,
+    floor: float,
+    atr_k: float,
+) -> float:
+    return dynamic_atr_points(atr, floor=floor, atr_k=atr_k)
 
 
 def dynamic_vwap_stop_distance(
@@ -59,6 +108,4 @@ def dynamic_vwap_stop_distance(
     floor: float,
     atr_k: float,
 ) -> float:
-    if atr <= 0:
-        return floor
-    return max(floor, round(atr * atr_k, 2))
+    return dynamic_atr_points(atr, floor=floor, atr_k=atr_k)
