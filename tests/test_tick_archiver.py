@@ -148,6 +148,26 @@ class TestTickArchiver(unittest.TestCase):
             archiver.shutdown()
             self.assertGreaterEqual(archiver.dropped, 1)
 
+    def test_interval_flush_during_continuous_stream(self):
+        """Time-based flush must fire even when queue never empties."""
+        with tempfile.TemporaryDirectory() as d:
+            archiver = TickArchiver(
+                "TXFR1",
+                cache_dir=Path(d),
+                flush_batch=500,
+                flush_interval_sec=0.1,
+                queue_maxsize=100,
+            )
+            archiver.start()
+            base = datetime.datetime(2026, 6, 12, 9, 0)
+            for i in range(5):
+                archiver.enqueue(_record(base.replace(second=i)))
+            time.sleep(0.25)
+            path = cache_path(Path(d), "TXFR1", datetime.date(2026, 6, 12))
+            self.assertTrue(path.is_file())
+            self.assertEqual(len(load_ticks_csv(path)), 5)
+            archiver.shutdown()
+
     def test_enqueue_tick_from_mock(self):
         tick = MagicMock()
         tick.datetime = datetime.datetime(2026, 6, 12, 9, 0)
@@ -176,6 +196,40 @@ class TestTickArchiver(unittest.TestCase):
 
 
 class TestCompressTickCache(unittest.TestCase):
+    def test_compress_default_excludes_today(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            today = datetime.date.today()
+            yesterday = today - datetime.timedelta(days=1)
+            save_ticks_csv(
+                [
+                    ReplayTick(
+                        datetime.datetime.combine(yesterday, datetime.time(9)),
+                        "18000",
+                        1,
+                        0,
+                    )
+                ],
+                cache_path(root, "TXFR1", yesterday),
+            )
+            save_ticks_csv(
+                [
+                    ReplayTick(
+                        datetime.datetime.combine(today, datetime.time(9)),
+                        "18010",
+                        1,
+                        0,
+                    )
+                ],
+                cache_path(root, "TXFR1", today),
+            )
+            n = compress_tick_cache(root, exclude_date=today)
+            self.assertEqual(n, 1)
+            self.assertTrue(cache_path(root, "TXFR1", today).is_file())
+            self.assertTrue(
+                Path(str(cache_path(root, "TXFR1", yesterday)) + ".gz").is_file()
+            )
+
     def test_compress_excludes_today(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)

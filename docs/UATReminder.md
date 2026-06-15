@@ -3,7 +3,7 @@
 > **執行環境：Windows**（PowerShell 啟動，見 [`README.md`](../README.md)）。
 > 通過標準：**每項有 log 證據 + 人工對帳一致**。驗的是狀態機，不是有沒有賺錢。
 >
-> 完整清單見 [`TODO.md`](../TODO.md) Phase 3。以下按實作項目整理驗收要點。
+> 完整清單見 [`TODO.md`](../TODO.md) Phase 3。**P0-11（tick 落盤）已實作（2026-06-15）**；開 UAT 前仍需永豐模擬 API 金鑰。
 
 ---
 
@@ -21,7 +21,8 @@ $env:DUMP_ORDER_EVENTS = "1"
 python src\man.py
 ```
 
-- [ ] **P0-11** 已實作且 `TICK_ARCHIVE=1` 盤中寫入 `tick_cache/*.csv`；收盤後 rotate 或排程器產出 `*.csv.gz`
+- [x] **P0-11** 已實作；`TICK_ARCHIVE=1` 盤中寫入 `tick_cache/*.csv`；log 見 `Tick 落盤已啟用`
+- [ ] 收盤後 rotate 或排程器產出 `*.csv.gz`（見下方排程器）
 - [ ] `config/config.yaml` 中 `simulation: true`
 - [ ] 系統時區為台北 (UTC+8)
 - [ ] log 出現 `VWAP Momentum 策略已啟動` 與 `ATR(...) 更新`
@@ -29,10 +30,23 @@ python src\man.py
 
 ### UAT 第一天（必做）
 
-1. `TICK_ARCHIVE=1` 跑滿交易時段 → 盤中確認 `.csv`；收盤後 rotate / 排程器 → 確認 `.csv.gz` 可重放（P0-11）
-2. `DUMP_ORDER_EVENTS=1` 跑一筆委託/成交 → 搜尋 `RAW_ORDER_EVT` 確認欄位名（P0-9）
-3. 確認啟動無 `無期貨帳號` 錯誤（P0-10）
-4. 收盤後：`python src\uat_report.py C:\logs\theman-uat.log`（P2-7）
+1. `TICK_ARCHIVE=1` 跑滿交易時段 → 盤中確認 `tick_cache/{code}_{date}.csv` 持續增長；確認 tick 欄位（`close` / `bid_price` / `ask_price`）與落盤 CSV 一致
+2. 收盤後：`python src\compress_tick_cache.py`（**預設排除當日**；僅壓歷史 plain 檔）→ 確認 `*.csv.gz` 可 `iter_replay_ticks` 重放
+3. `DUMP_ORDER_EVENTS=1` 跑一筆委託/成交 → 搜尋 `RAW_ORDER_EVT` 確認欄位名（P0-9）
+4. 確認啟動無 `無期貨帳號` 錯誤（P0-10）
+5. 收盤後：`python src\uat_report.py C:\logs\theman-uat.log`（P2-7）
+
+### 收盤後 tick 壓縮（工作排程器建議 15:30 / 16:00）
+
+```powershell
+cd C:\path\to\theman
+.\.venv\Scripts\activate
+python src\compress_tick_cache.py
+```
+
+- 預設**跳過當日**進行中 `.csv`（防 Linux/開發機誤壓；Windows 上亦更安全）
+- 若要強制壓當日檔（通常不需要）：`python src\compress_tick_cache.py --include-today`
+- 跨日 rotate（程式仍在跑）會自動 gzip **昨日**檔；排程器補 crash 未 rotate 的歷史檔
 
 ---
 
@@ -169,8 +183,9 @@ signal 產生後、下單前已在 lock 內設 `is_pending`，開盤高頻 tick 
 - 重連：log `重連後狀態同步完成`（順序：pending 補查 → 對帳 → subscribe → ATR）
 
 ### 尚未納入本次 UAT blocker（可後補）
+- **P0-11 選配** kbars 日終落盤（Phase 6 回測前）
 - **P2-1** 部分成交（qty=1 暫不顯性）
-- **P1-4** SL/TP 與 ATR 掛鉤（可選優化）
+- **P1-4** SL/TP 與 ATR 掛鉤（可選優化；已併入 Phase 6）
 
 ---
 

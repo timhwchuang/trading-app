@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import datetime
 import logging
-import sys
 from pathlib import Path
 
 from data_loader import DEFAULT_CACHE_DIR
@@ -54,15 +53,15 @@ def main(argv: list[str] | None = None) -> int:
         help=f"Tick cache directory (default: {DEFAULT_CACHE_DIR})",
     )
     parser.add_argument(
-        "--exclude-today",
+        "--include-today",
         action="store_true",
-        help="Skip compressing today's in-progress CSV",
+        help="Also compress today's in-progress CSV (default: skip today)",
     )
     parser.add_argument(
         "--exclude-date",
         type=str,
         default="",
-        help="Skip files for this date (YYYY-MM-DD)",
+        help="Skip files for this date (YYYY-MM-DD); overrides default exclude-today",
     )
     args = parser.parse_args(argv)
 
@@ -72,11 +71,11 @@ def main(argv: list[str] | None = None) -> int:
         datefmt="%H:%M:%S",
     )
 
-    exclude: datetime.date | None = None
-    if args.exclude_date:
+    exclude: datetime.date | None = datetime.date.today()
+    if args.include_today and not args.exclude_date:
+        exclude = None
+    elif args.exclude_date:
         exclude = datetime.date.fromisoformat(args.exclude_date)
-    elif args.exclude_today:
-        exclude = datetime.date.today()
 
     n = compress_tick_cache(args.cache_dir, exclude_date=exclude)
     logger.info("壓縮完成 | %d file(s) | dir=%s", n, args.cache_dir)

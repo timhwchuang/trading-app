@@ -152,6 +152,8 @@ class TickArchiver:
             self._write_record(record)
             if len(self._pending_rows) >= self._flush_batch:
                 self._flush(force=True)
+            else:
+                self._maybe_flush()
         self._flush(force=True)
         self._close_current_file()
 

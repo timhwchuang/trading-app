@@ -33,10 +33,37 @@
 | ---- | ---- |
 | **申請永豐 API** | 目前 **0 權限**。模擬 UAT 建議勾：**行情/資料** + **帳務** + **交易**（不必勾正式環境、UAT 不需 CA）。 |
 | **UAT 累積 tick，取代大量下載歷史** | 決策：**不再**用 API 批量抓過往 tick。改在 **UAT 模擬盤中每日落盤 tick** → 累積成 `tick_cache/`，作為日後回測資料。優點：格式與實盤一致、零額外流量；缺點：回測樣本從 UAT 起跑日才開始累積。 |
-| **P0-11 UAT tick 落盤** | **UAT hard gate**：盤中非同步寫 **`*.csv`**；**gzip 由 rotate（換日/shutdown）或工作排程器** `compress_tick_cache` 執行 → `*.csv.gz`；`TICK_ARCHIVE=1`。 |
-| **回測 K 線（ATR）** | P0-11 選配：日終或 `refresh_atr` 後落地 kbars；開跑前確認 ATR 熱身（前日 bar）有覆蓋。 |
-| **Phase 3 UAT** | **待 P0-11**；見 [`UATReminder.md`](UATReminder.md)。驗狀態機，不驗獲利。 |
+| **P0-11 UAT tick 落盤** | ✅ 已實作（`TICK_ARCHIVE=1`）。盤中非同步 `*.csv`；gzip 由跨日 rotate 或 `compress_tick_cache`（**預設排除當日**）→ `*.csv.gz`。 |
+| **回測 K 線（ATR）** | P0-11 選配 follow-up：日終 kbars 落盤尚未做；Phase 6 回測前再補。 |
+| **Phase 3 UAT** | **可開跑**（待永豐模擬 API）；見 [`UATReminder.md`](UATReminder.md)。驗狀態機，不驗獲利。 |
 | **Pilot 門檻** | UAT 全過 + CA + `simulation: false`；**P2-7 秒停損率**為硬指標。 |
+
+---
+
+### 2026-06-15（週次 1 — P0-11 完成，解除 UAT gate）
+
+**目前進度**
+
+- **P0-11** 已實作並通過 code review 收尾：`tick_archiver.py`、`compress_tick_cache.py`、`data_loader` `.csv.gz` 支援、`TICK_ARCHIVE=1` 整合；`python run_tests.py` **102** 項全綠。
+- **Phase 3 UAT** 工程 blocker 已解除；仍待 **永豐模擬 API（0 權限）** 與 Windows UAT 機就緒。
+
+**人類必做（Follow-up）**
+
+- [ ] **申請永豐模擬 API 金鑰**（行情/資料 + 帳務 + 交易）
+- [ ] **準備 Windows UAT 機**：venv、`SJ_API_KEY` / `SJ_SEC_KEY`、`LOG_FILE=C:\logs\theman-uat.log`、`TICK_ARCHIVE=1`
+- [ ] API 到手後 **UAT Day 1**：`DUMP_ORDER_EVENTS=1` + 跑滿交易時段驗 tick 落盤與委託欄位
+- [ ] 收盤後工作排程器：`python src\compress_tick_cache.py`（預設排除當日；不需 `--exclude-today`）
+
+**Pending / 待決策**
+
+- [ ] **kbars 日終落盤**（P0-11 選配）— Phase 6 趨勢濾網回測前再補
+- [ ] P4-0 Windows 上線檢查清單、P4-3 告警、P4-4 進程守護 — Pilot 前再做
+
+**備註 / 開發日記**
+
+- Code review 兩項收尾已合入：① 高頻 tick 時每 2s interval flush（不只 queue 空才 flush）；② `compress_tick_cache` 預設跳過當日檔，避免 Linux 開發機誤壓進行中 CSV。
+- shutdown **刻意不** gzip 當日 plain 檔（避免 `.gz` 與重啟後新 `.csv` 並存導致重放漏資料）；收盤靠排程器壓縮。
+- UAT Day 1 另須確認 Shioaji tick 的 `close`（Decimal）、`bid_price`/`ask_price` 欄位與 P0-9 `RAW_ORDER_EVT` 並行驗證。
 
 ---
 
