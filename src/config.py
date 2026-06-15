@@ -53,6 +53,15 @@ class Settings:
     no_tick_timeout_sec: int
     clock_skew_warn_sec: float
 
+    trend_filter_enabled: bool
+    trend_ema_period: int
+    trail_atr_k: float
+    trail_points_floor: float
+    vwap_stop_atr_k: float
+    vwap_stop_points_floor: float
+    atr_trailing_enabled: bool
+    atr_vwap_stop_enabled: bool
+
     session_start: datetime.time
     session_end: datetime.time
     session_flatten_time: datetime.time
@@ -137,6 +146,20 @@ def load_config(path: str | Path | None = None) -> Settings:
         vwap_stop_points=int(strategy.get("vwap_stop_points", 3)),
         no_tick_timeout_sec=int(strategy.get("no_tick_timeout_sec", 45)),
         clock_skew_warn_sec=float(strategy.get("clock_skew_warn_sec", 1.0)),
+        trend_filter_enabled=bool(strategy.get("trend_filter_enabled", False)),
+        trend_ema_period=int(strategy.get("trend_ema_period", 20)),
+        trail_atr_k=float(strategy.get("trail_atr_k", 0.25)),
+        trail_points_floor=float(
+            strategy.get("trail_points_floor", strategy.get("trail_points", 8))
+        ),
+        vwap_stop_atr_k=float(strategy.get("vwap_stop_atr_k", 0.25)),
+        vwap_stop_points_floor=float(
+            strategy.get(
+                "vwap_stop_points_floor", strategy.get("vwap_stop_points", 3)
+            )
+        ),
+        atr_trailing_enabled=bool(strategy.get("atr_trailing_enabled", False)),
+        atr_vwap_stop_enabled=bool(strategy.get("atr_vwap_stop_enabled", False)),
         session_start=_parse_time(session.get("start", "08:45")),
         session_end=_parse_time(session.get("end", "13:45")),
         session_flatten_time=_parse_time(session.get("flatten_time", "13:40")),
@@ -210,6 +233,14 @@ HARD_STOP_POINTS = settings.hard_stop_points
 VWAP_STOP_POINTS = settings.vwap_stop_points
 NO_TICK_TIMEOUT_SEC = settings.no_tick_timeout_sec
 CLOCK_SKEW_WARN_SEC = settings.clock_skew_warn_sec
+TREND_FILTER_ENABLED = settings.trend_filter_enabled
+TREND_EMA_PERIOD = settings.trend_ema_period
+TRAIL_ATR_K = settings.trail_atr_k
+TRAIL_POINTS_FLOOR = settings.trail_points_floor
+VWAP_STOP_ATR_K = settings.vwap_stop_atr_k
+VWAP_STOP_POINTS_FLOOR = settings.vwap_stop_points_floor
+ATR_TRAILING_ENABLED = settings.atr_trailing_enabled
+ATR_VWAP_STOP_ENABLED = settings.atr_vwap_stop_enabled
 SESSION_START = settings.session_start
 SESSION_END = settings.session_end
 SESSION_FLATTEN_TIME = settings.session_flatten_time

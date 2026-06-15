@@ -20,6 +20,8 @@ class SignalAudit:
     vol_threshold: float = 0.0
     vwap: float = 0.0
     reason: str = ""
+    trend_dir: str = ""
+    trend_strength: float = 0.0
 
 
 def format_signal_audit(audit: SignalAudit) -> str:

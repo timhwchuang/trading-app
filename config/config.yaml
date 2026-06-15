@@ -82,6 +82,16 @@ strategy:
   # VWAP 追蹤停損點數（保護期結束後與硬停損並存，取較緊者）
   vwap_stop_points: 3
 
+  # --- Phase 6 策略真實化（預設關閉；有 UAT tick 後再校準 k）---
+  trend_filter_enabled: false
+  trend_ema_period: 20
+  atr_trailing_enabled: false
+  trail_atr_k: 0.25
+  trail_points_floor: 8
+  atr_vwap_stop_enabled: false
+  vwap_stop_atr_k: 0.25
+  vwap_stop_points_floor: 3
+
   # 交易時段內無 tick 超過此秒數 → 看門狗告警並嘗試重訂閱（P4-8）
   no_tick_timeout_sec: 45
 

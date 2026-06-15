@@ -34,8 +34,16 @@ from order_errors import (
     should_retry_order,
 )
 from alerts import send_alert
+from strategy_phase6 import (
+    dynamic_trail_points,
+    dynamic_vwap_stop_distance,
+    trend_allows_entry,
+    trend_from_ema,
+)
 
 from config import (
+    ATR_TRAILING_ENABLED,
+    ATR_VWAP_STOP_ENABLED,
     API_KEY,
     DUMP_ORDER_EVENTS,
     TICK_ARCHIVE,
@@ -81,7 +89,13 @@ from config import (
     SESSION_WATCHDOG_SEC,
     SIMULATION,
     TRAIL_POINTS,
+    TRAIL_ATR_K,
+    TRAIL_POINTS_FLOOR,
+    TREND_EMA_PERIOD,
+    TREND_FILTER_ENABLED,
+    VWAP_STOP_ATR_K,
     VWAP_STOP_POINTS,
+    VWAP_STOP_POINTS_FLOOR,
     VWAP_WINDOW_MIN,
     settings,
 )
@@ -230,6 +244,8 @@ class VWAPMomentumStrategy:
         self.current_atr = 0.0
         self.last_atr_refresh = 0.0
         self._atr_long_lookback_date: Optional[datetime.date] = None
+        self.trend_dir = "Flat"
+        self.trend_strength = 0.0
 
         self.lock = threading.Lock()
         self.contract = None
@@ -492,8 +508,16 @@ class VWAPMomentumStrategy:
                 end=today.isoformat(),
             )
             atr = self._compute_atr(kbars)
+            trend_dir, trend_strength = self.trend_dir, self.trend_strength
+            if TREND_FILTER_ENABLED:
+                closes = list(getattr(kbars, "Close", []) or [])
+                trend_dir, trend_strength = trend_from_ema(
+                    closes, TREND_EMA_PERIOD
+                )
             with self.lock:
                 self.current_atr = atr
+                self.trend_dir = trend_dir
+                self.trend_strength = trend_strength
                 if used_long:
                     self._atr_long_lookback_date = today
             lookback_label = (
@@ -670,6 +694,8 @@ class VWAPMomentumStrategy:
             vol_threshold=round(vol_threshold, 1),
             vwap=round(self.current_vwap, 1),
             reason="pullback",
+            trend_dir=self.trend_dir,
+            trend_strength=self.trend_strength,
         )
 
     def _build_exit_audit(
@@ -876,6 +902,13 @@ class VWAPMomentumStrategy:
         if not (near_vwap and exhausted):
             return None
 
+        if not trend_allows_entry(
+            enabled=TREND_FILTER_ENABLED,
+            trend_dir=self.trend_dir,
+            momentum_dir=self.momentum_dir,
+        ):
+            return None
+
         self._obs.record_momentum_entry()
         if self.momentum_dir == "Long":
             return OrderSignal(
@@ -930,15 +963,34 @@ class VWAPMomentumStrategy:
             return False
         return (ts - self.entry_exchange_ts) < EXIT_GRACE_SEC
 
+    def _effective_trail_points(self) -> float:
+        if not ATR_TRAILING_ENABLED:
+            return float(TRAIL_POINTS)
+        return dynamic_trail_points(
+            self.current_atr,
+            floor=TRAIL_POINTS_FLOOR,
+            atr_k=TRAIL_ATR_K,
+        )
+
+    def _effective_vwap_stop_distance(self) -> float:
+        if not ATR_VWAP_STOP_ENABLED:
+            return float(VWAP_STOP_POINTS)
+        return dynamic_vwap_stop_distance(
+            self.current_atr,
+            floor=VWAP_STOP_POINTS_FLOOR,
+            atr_k=VWAP_STOP_ATR_K,
+        )
+
     def _stop_loss_hit(
         self, price: float, ts: int, *, is_long: bool
     ) -> tuple[bool, str]:
+        vwap_stop = self._effective_vwap_stop_distance()
         if is_long:
             hard_hit = price <= self.entry_price - HARD_STOP_POINTS
-            vwap_hit = price <= self.current_vwap - VWAP_STOP_POINTS
+            vwap_hit = price <= self.current_vwap - vwap_stop
         else:
             hard_hit = price >= self.entry_price + HARD_STOP_POINTS
-            vwap_hit = price >= self.current_vwap + VWAP_STOP_POINTS
+            vwap_hit = price >= self.current_vwap + vwap_stop
 
         if self._in_exit_grace_period(ts):
             return (hard_hit, "stop_loss") if hard_hit else (False, "")
@@ -950,10 +1002,11 @@ class VWAPMomentumStrategy:
         return False, ""
 
     def manage_exit(self, price: float, ts: int) -> Optional[OrderSignal]:
+        trail_pts = self._effective_trail_points()
         if self.position_dir == "Long":
             sl_hit, sl_reason = self._stop_loss_hit(price, ts, is_long=True)
             tp_hit = price >= self.entry_price + FIXED_TP_POINTS
-            trail_hit = price <= self.trailing_peak - TRAIL_POINTS
+            trail_hit = price <= self.trailing_peak - trail_pts
             if sl_hit or tp_hit or trail_hit:
                 reason = (
                     sl_reason
@@ -973,7 +1026,7 @@ class VWAPMomentumStrategy:
         else:
             sl_hit, sl_reason = self._stop_loss_hit(price, ts, is_long=False)
             tp_hit = price <= self.entry_price - FIXED_TP_POINTS
-            trail_hit = price >= self.trailing_peak + TRAIL_POINTS
+            trail_hit = price >= self.trailing_peak + trail_pts
             if sl_hit or tp_hit or trail_hit:
                 reason = (
                     sl_reason
