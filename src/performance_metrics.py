@@ -126,10 +126,14 @@ def compute_expectancy_stats(
     }
 
 
-def equity_curve_from_pnls(net_pnls: Sequence[float]) -> list[float]:
-    """Cumulative equity starting at 0 (before first trade)."""
-    equity: list[float] = [0.0]
-    running = 0.0
+def equity_curve_from_pnls(
+    net_pnls: Sequence[float],
+    *,
+    initial_capital: float = 0.0,
+) -> list[float]:
+    """Cumulative equity starting at initial_capital (before first trade)."""
+    equity: list[float] = [round(initial_capital, 4)]
+    running = round(initial_capital, 4)
     for p in net_pnls:
         running = round(running + p, 4)
         equity.append(running)
@@ -137,7 +141,7 @@ def equity_curve_from_pnls(net_pnls: Sequence[float]) -> list[float]:
 
 
 def compute_drawdown(equity_curve: Sequence[float]) -> dict[str, Any]:
-    """Max drawdown on an equity curve that includes the starting balance (0)."""
+    """Max drawdown on an equity curve that includes the starting balance."""
     if len(equity_curve) < 2:
         return {
             "max_drawdown_points": None,
@@ -215,13 +219,16 @@ def compute_performance_from_fills(
     friction: FrictionSettings,
     *,
     sharpe_period: str = "per_trade",
+    initial_capital: float = 0.0,
 ) -> dict[str, Any]:
     gross_pnls = extract_round_trip_gross_pnls(fills)
     fpt = friction_per_round_trip(friction)
     expectancy = compute_expectancy_stats(gross_pnls, friction_per_trade=fpt)
 
     net_pnls = [round(g - fpt, 4) for g in gross_pnls]
-    cumulative_net = equity_curve_from_pnls(net_pnls)
+    cumulative_net = equity_curve_from_pnls(
+        net_pnls, initial_capital=initial_capital
+    )
 
     drawdown = compute_drawdown(cumulative_net)
     sharpe_src = net_pnls if sharpe_period == "per_trade" else gross_pnls
@@ -241,6 +248,8 @@ def compute_performance_from_fills(
 
 def aggregate_daily_performance(
     summaries: Sequence[Mapping[str, Any]],
+    *,
+    initial_capital: float = 0.0,
 ) -> dict[str, Any]:
     """Aggregate multi-day DAILY_SUMMARY performance blocks (sum PnL, chained MDD)."""
     total_gross = 0.0
@@ -266,7 +275,9 @@ def aggregate_daily_performance(
     win_rate = round(win_count / trade_count, 4) if trade_count else None
 
     if all_net_pnls:
-        dd = compute_drawdown(equity_curve_from_pnls(all_net_pnls))
+        dd = compute_drawdown(
+            equity_curve_from_pnls(all_net_pnls, initial_capital=initial_capital)
+        )
         max_dd_points = dd["max_drawdown_points"]
         max_dd_pct = dd["max_drawdown_pct"]
     else:

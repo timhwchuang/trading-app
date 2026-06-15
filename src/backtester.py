@@ -47,6 +47,7 @@ class BacktestEngine:
         self.strategy = VWAPMomentumStrategy(api=self.broker, clock=self.clock)
         self.strategy.contract = self.broker.resolve_contract(code)
         self.strategy._maybe_refresh_atr = _noop_maybe_refresh_atr
+        self.strategy._order_sync_mode = True
         self.code = code
         self.dates = dates
         self.cache_dir = cache_dir

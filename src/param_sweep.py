@@ -8,47 +8,21 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import config
-import man
-import observability
 from backtester import BacktestEngine
 from config import SWEEP_DD_PENALTY, SWEEP_SCORE_METRIC, SWEEP_SL_PENALTY
 from data_loader import DEFAULT_CACHE_DIR
 from determinism_check import _AuditCaptureHandler
 from performance_metrics import aggregate_daily_performance, sweep_score_from_kpi
+from strategy_config import (
+    apply_strategy_params,
+    restore_strategy_params,
+)
 
 DEFAULT_PENALTY = 50.0
 
-_PATCH_TARGETS = (
-    "ENTRY_BAND_POINTS",
-    "VWAP_STOP_POINTS",
-    "EXHAUSTION_VOL",
-    "EXIT_GRACE_TICKS",
-    "FIXED_TP_POINTS",
-    "TRAIL_POINTS",
-    "HARD_STOP_POINTS",
-)
-
-
-def _apply_params(params: dict[str, Any]) -> dict[str, tuple[Any, Any, Any]]:
-    saved: dict[str, tuple[Any, Any, Any]] = {}
-    for k, v in params.items():
-        saved[k] = (
-            getattr(man, k, None),
-            getattr(config, k, None),
-            getattr(observability, k, None),
-        )
-        setattr(man, k, v)
-        setattr(config, k, v)
-        setattr(observability, k, v)
-    return saved
-
-
-def _restore_params(saved: dict[str, tuple[Any, Any, Any]]) -> None:
-    for k, (mv, cv, ov) in saved.items():
-        setattr(man, k, mv)
-        setattr(config, k, cv)
-        setattr(observability, k, ov)
+# Backward-compatible aliases for tests
+_apply_params = apply_strategy_params
+_restore_params = restore_strategy_params
 
 
 def _run_backtest_summaries(
@@ -136,7 +110,7 @@ def sweep(
     results: list[dict[str, Any]] = []
     for combo in combos:
         params = dict(zip(keys, combo))
-        saved = _apply_params(params)
+        saved = apply_strategy_params(params)
         try:
             train_kpi = _aggregate_kpi(
                 _run_backtest_summaries(code, dates_train, cache_path)
@@ -153,7 +127,7 @@ def sweep(
                 }
             )
         finally:
-            _restore_params(saved)
+            restore_strategy_params(saved)
 
     results.sort(key=lambda row: row["valid_score"], reverse=True)
 

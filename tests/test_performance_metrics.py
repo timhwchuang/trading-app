@@ -39,11 +39,12 @@ class TestPerformanceMetrics(unittest.TestCase):
         dd = compute_drawdown(equity)
         self.assertEqual(dd["max_drawdown_points"], 5.0)
 
-    def test_drawdown_pct_uses_peak_at_drawdown(self):
-        equity = equity_curve_from_pnls([10.0, -8.0])
+    def test_drawdown_with_initial_capital(self):
+        equity = equity_curve_from_pnls([5.0, -3.0], initial_capital=100.0)
+        self.assertEqual(equity[0], 100.0)
         dd = compute_drawdown(equity)
-        self.assertEqual(dd["max_drawdown_points"], 8.0)
-        self.assertEqual(dd["max_drawdown_pct"], 80.0)
+        self.assertEqual(dd["max_drawdown_points"], 3.0)
+        self.assertAlmostEqual(dd["max_drawdown_pct"], 2.8571, places=4)
 
     def test_aggregate_daily_chained_mdd(self):
         day1 = {

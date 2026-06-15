@@ -260,12 +260,16 @@ class VWAPMomentumStrategy:
         self._last_tick_wall_time = 0.0
         self._last_tick_exchange_dt: Optional[datetime.datetime] = None
         self._tick_type_counts = {0: 0, 1: 0, 2: 0}
+        self._tick_type_inferred_counts = {1: 0, 2: 0}
         self._last_tick_type_log_wall = 0.0
         self._last_clock_skew_warn_wall = 0.0
         self._last_no_tick_resubscribe_wall = 0.0
         self._pending_intent_cancel_exchange_dt: Optional[datetime.datetime] = None
         self._obs = DailyObservability()
         self._tick_archiver: Optional[TickArchiver] = None
+        self._order_queue: queue.Queue[Optional[OrderSignal]] = queue.Queue()
+        self._order_sync_mode = False
+        self._order_worker_started = False
 
     def _activate_ca(self) -> None:
         """P4-10: 先無 person_id；失敗則以 env / 帳號 person_id 重試。"""
@@ -317,7 +321,7 @@ class VWAPMomentumStrategy:
             self._activate_ca()
             self.api.subscribe_trade(self.api.futopt_account)
 
-        self.sync_positions()
+        self.sync_positions(force_resync=True)
         self.refresh_atr()
         self._log_api_usage("login")
 
@@ -370,7 +374,7 @@ class VWAPMomentumStrategy:
     def _position_matches_contract(self, pos) -> bool:
         return pos.code in self._contract_position_codes()
 
-    def sync_positions(self):
+    def sync_positions(self, *, force_resync: bool = False):
         """啟動時從券商同步持倉，避免重啟後策略與實際部位脫節。"""
         try:
             positions = self.api.list_positions(account=self.api.futopt_account)
@@ -408,20 +412,37 @@ class VWAPMomentumStrategy:
                 return
 
             is_long = matched.direction in (sj.Action.Buy, "Buy")
+            new_dir = "Long" if is_long else "Short"
+            had_position = self.has_position
+            same_direction = had_position and self.position_dir == new_dir
+            preserve_peak = (
+                had_position and same_direction and not force_resync
+            )
+
             self.has_position = True
-            self.position_dir = "Long" if is_long else "Short"
+            self.position_dir = new_dir
             self.entry_price = float(matched.price)
-            self.trailing_peak = self.entry_price
-            self._resynced_position = True
+            if preserve_peak:
+                logger.info(
+                    "持倉對帳 | 保留 trailing_peak=%.1f | %s %d口 @ %.1f",
+                    self.trailing_peak,
+                    self.position_dir,
+                    matched.quantity,
+                    self.entry_price,
+                )
+            else:
+                self.trailing_peak = self.entry_price
+                self._resynced_position = True
             self._activate_vwap_stop_immediately()
             self.reset_momentum()
-            logger.info(
-                "持倉對帳 | %s %d口 @ %.1f | code=%s | peak 待首 tick 校準",
-                self.position_dir,
-                matched.quantity,
-                self.entry_price,
-                matched.code,
-            )
+            if not preserve_peak:
+                logger.info(
+                    "持倉對帳 | %s %d口 @ %.1f | code=%s | peak 待首 tick 校準",
+                    self.position_dir,
+                    matched.quantity,
+                    self.entry_price,
+                    matched.code,
+                )
 
     def _resolve_contract(self):
         txf = getattr(self.api.Contracts.Futures, "TXF", None)
@@ -429,11 +450,15 @@ class VWAPMomentumStrategy:
             return getattr(txf, PRODUCT_CODE)
         return self.api.Contracts.Futures[PRODUCT_CODE]
 
-    def _parse_tick(self, tick: TickFOPv1) -> Tuple[int, float, int, int]:
+    def _parse_tick_locked(
+        self, tick: TickFOPv1
+    ) -> Tuple[int, float, int, int, int]:
+        """Parse tick inside lock; infer buy/sell from price when type0."""
         ts = int(tick.datetime.timestamp())
         price = float(tick.close)
         volume = int(tick.volume)
-        tick_type = int(getattr(tick, "tick_type", 0) or 0)
+        original_tick_type = int(getattr(tick, "tick_type", 0) or 0)
+        tick_type = original_tick_type
 
         if tick_type == 0 and self.last_tick_price > 0:
             if price > self.last_tick_price:
@@ -442,24 +467,27 @@ class VWAPMomentumStrategy:
                 tick_type = 2
 
         self.last_tick_price = price
-        return ts, price, volume, tick_type
+        if original_tick_type == 0 and tick_type in (1, 2):
+            self._tick_type_inferred_counts[tick_type] = (
+                self._tick_type_inferred_counts.get(tick_type, 0) + 1
+            )
+            self._obs.record_tick_type(original_tick_type, tick_type)
+        return ts, price, volume, tick_type, original_tick_type
 
     def on_tick(self, tick: TickFOPv1):
-        ts, price, volume, tick_type = self._parse_tick(tick)
-        self._record_tick_arrival(ts, tick.datetime, tick_type)
-
-        if self._tick_archiver is not None:
-            self._tick_archiver.enqueue_tick(tick, tick_type)
-
-        if volume >= 20:
-            logger.debug(
-                "Tick | Price:%.1f | Vol:%d | Type:%d", price, volume, tick_type
-            )
-
         signal: Optional[OrderSignal] = None
+        ts = 0
+        price = 0.0
+        volume = 0
+        tick_type = 0
+        original_tick_type = 0
         lock_wait_start = time.perf_counter()
         with self.lock:
             self._obs.record_lock_wait((time.perf_counter() - lock_wait_start) * 1000)
+            ts, price, volume, tick_type, original_tick_type = self._parse_tick_locked(
+                tick
+            )
+            self._record_tick_arrival_locked(ts, tick.datetime, tick_type)
             self._obs.record_atr(self.current_atr)
             self._maybe_refresh_atr(ts)
             self.update_vwap(ts, price, volume)
@@ -481,8 +509,20 @@ class VWAPMomentumStrategy:
                 self._arm_pending(signal)
                 self._log_signal_audit(signal)
 
+        if self._tick_archiver is not None:
+            self._tick_archiver.enqueue_tick(tick, tick_type)
+
+        if volume >= 20:
+            logger.debug(
+                "Tick | Price:%.1f | Vol:%d | Type:%d (orig=%d)",
+                price,
+                volume,
+                tick_type,
+                original_tick_type,
+            )
+
         if signal is not None:
-            self.place_order(signal)
+            self._enqueue_order(signal)
 
     def _maybe_refresh_atr(self, ts: int):
         if ts - self.last_atr_refresh >= ATR_REFRESH_SEC:
@@ -513,7 +553,6 @@ class VWAPMomentumStrategy:
                 end=today.isoformat(),
             )
             atr = self._compute_atr(kbars)
-            trend_dir, trend_strength = self.trend_dir, self.trend_strength
             if TREND_FILTER_ENABLED:
                 closes = list(getattr(kbars, "Close", []) or [])
                 trend_dir, trend_strength = compute_trend(
@@ -523,6 +562,10 @@ class VWAPMomentumStrategy:
                     ema_period=TREND_EMA_PERIOD,
                     vwap_slope_min=VWAP_SLOPE_MIN,
                 )
+            else:
+                with self.lock:
+                    trend_dir = self.trend_dir
+                    trend_strength = self.trend_strength
             with self.lock:
                 self.current_atr = atr
                 self.trend_dir = trend_dir
@@ -583,6 +626,17 @@ class VWAPMomentumStrategy:
             self.trailing_peak,
         )
 
+    def _record_tick_arrival_locked(
+        self, ts: int, exchange_dt: datetime.datetime, tick_type: int
+    ) -> None:
+        """Must be called with self.lock held."""
+        self.last_tick_exchange_ts = ts
+        self._last_tick_wall_time = self._clock()
+        self._last_tick_exchange_dt = exchange_dt
+        bucket = tick_type if tick_type in self._tick_type_counts else 0
+        self._tick_type_counts[bucket] = self._tick_type_counts.get(bucket, 0) + 1
+        self._maybe_warn_clock_skew(ts)
+
     def _record_tick_arrival(
         self, ts: int, exchange_dt: datetime.datetime, tick_type: int
     ) -> None:
@@ -621,14 +675,18 @@ class VWAPMomentumStrategy:
         if total == 0:
             return
         self._last_tick_type_log_wall = now
+        inferred_total = sum(self._tick_type_inferred_counts.values())
         logger.info(
             "tick_type 分布 | type0=%d type1=%d type2=%d total=%d "
-            "| type0_pct=%.1f%%",
+            "| type0_pct=%.1f%% | inferred_buy=%d inferred_sell=%d inferred_total=%d",
             self._tick_type_counts.get(0, 0),
             self._tick_type_counts.get(1, 0),
             self._tick_type_counts.get(2, 0),
             total,
             100.0 * self._tick_type_counts.get(0, 0) / total,
+            self._tick_type_inferred_counts.get(1, 0),
+            self._tick_type_inferred_counts.get(2, 0),
+            inferred_total,
         )
 
     def _check_no_tick_watchdog(self) -> None:
@@ -825,6 +883,7 @@ class VWAPMomentumStrategy:
         self._reset_daily_state()
         self._obs.reset()
         self._tick_type_counts = {0: 0, 1: 0, 2: 0}
+        self._tick_type_inferred_counts = {1: 0, 2: 0}
         self._trading_date = trade_date
 
     def _reset_daily_state(self) -> None:
@@ -1214,7 +1273,37 @@ class VWAPMomentumStrategy:
         if signal is None:
             return
         logger.info("出場下單退避重試觸發")
-        self.place_order(signal)
+        self._enqueue_order(signal)
+
+    def _start_order_worker(self) -> None:
+        if self._order_worker_started:
+            return
+        self._order_worker_started = True
+        threading.Thread(
+            target=self._order_worker_loop,
+            daemon=True,
+            name="order-worker",
+        ).start()
+
+    def _order_worker_loop(self) -> None:
+        while True:
+            signal = self._order_queue.get()
+            try:
+                if signal is None:
+                    break
+                self.place_order(signal)
+            except Exception as e:
+                logger.error("Order worker 異常: %s", e)
+            finally:
+                self._order_queue.task_done()
+
+    def _enqueue_order(self, signal: OrderSignal) -> None:
+        """Decouple API place_order from on_tick lock (live: async worker)."""
+        if self._order_sync_mode:
+            self.place_order(signal)
+            return
+        self._start_order_worker()
+        self._order_queue.put_nowait(signal)
 
     def _maybe_dump_raw_order_event(self, stat, msg) -> None:
         if not DUMP_ORDER_EVENTS:
@@ -1710,6 +1799,7 @@ class VWAPMomentumStrategy:
         )
 
         threading.Thread(target=self._timeout_loop, daemon=True).start()
+        self._start_order_worker()
 
         try:
             while self._running:
@@ -1718,6 +1808,8 @@ class VWAPMomentumStrategy:
             logger.info("策略手動停止")
         finally:
             self._running = False
+            if not self._order_sync_mode:
+                self._order_queue.put_nowait(None)
             if self._tick_archiver is not None:
                 self._tick_archiver.shutdown()
             if self._trading_date is not None:

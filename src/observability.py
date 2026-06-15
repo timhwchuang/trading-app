@@ -7,50 +7,11 @@ import statistics
 from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping
 
-from config import (
-    ATR_KLINE_LOOKBACK_DAYS,
-    ATR_PERIOD,
-    ATR_REFRESH_SEC,
-    ATR_VOL_MULT,
-    BASE_VOL,
-    COMMISSION_PER_SIDE_NTD,
-    COMMISSION_PER_SIDE_POINTS,
-    COOLDOWN_SEC,
-    ENTRY_BAND_POINTS,
-    EXHAUSTION_VOL,
-    EXIT_GRACE_SEC,
-    EXIT_GRACE_TICKS,
-    FIXED_TP_POINTS,
-    FLATTEN_SLIPPAGE_POINTS,
-    FRICTION_ENABLED,
-    FRICTION_MODE,
-    FRICTION_TAX_RATE,
-    HARD_STOP_POINTS,
-    IOC_SLIPPAGE_POINTS,
-    MAX_CONSECUTIVE_LOSS,
-    MAX_DAILY_LOSS_POINTS,
-    MIN_ATR_THRESHOLD,
-    MOMENTUM_BUY_RATIO,
-    MOMENTUM_SELL_RATIO,
-    NO_TICK_TIMEOUT_SEC,
-    OPEN_MULT_FUTURES,
-    OPEN_MULT_NORMAL,
-    OPEN_MULT_SPOT,
-    PENDING_TIMEOUT_SEC,
-    POINT_VALUE_NTD,
-    PRODUCT_CODE,
-    ROUND_TRIP_FRICTION_POINTS,
-    SHARPE_PERIOD,
-    SIMULATION,
-    TAX_PER_EXIT_POINTS,
-    TRAIL_POINTS,
-    VWAP_STOP_POINTS,
-    VWAP_WINDOW_MIN,
-)
+from config import settings
 from performance_metrics import (
-    FrictionSettings,
     aggregate_daily_performance,
     compute_performance_from_fills,
+    friction_settings_from_mapping,
 )
 
 
@@ -175,6 +136,9 @@ class DailyObservability:
     tick_type_counts: dict[str, int] = field(
         default_factory=lambda: {"0": 0, "1": 0, "2": 0}
     )
+    tick_type_inferred_counts: dict[str, int] = field(
+        default_factory=lambda: {"1": 0, "2": 0}
+    )
     atr_min: float | None = None
     atr_max: float | None = None
     daily_pnl: float = 0.0
@@ -235,6 +199,13 @@ class DailyObservability:
     def snapshot_tick_types(self, counts: Mapping[int, int]) -> None:
         for key in (0, 1, 2):
             self.tick_type_counts[str(key)] = int(counts.get(key, 0))
+
+    def record_tick_type(self, original: int, effective: int) -> None:
+        """Track original vs price-inferred tick_type for UAT debug."""
+        if original == 0 and effective in (1, 2):
+            self.tick_type_inferred_counts[str(effective)] = (
+                self.tick_type_inferred_counts.get(str(effective), 0) + 1
+            )
 
     def record_fill(
         self,
@@ -313,6 +284,7 @@ class DailyObservability:
             if tick_total
             else None
         )
+        inferred_total = sum(self.tick_type_inferred_counts.values())
         entry_slips = [f["slippage_pts"] for f in entry_fills]
         exit_slips = [f["slippage_pts"] for f in exit_fills]
         pnl_by_reason = {
@@ -325,18 +297,20 @@ class DailyObservability:
             }
             for reason, v in self.pnl_by_reason.items()
         }
-        friction = FrictionSettings(
-            enabled=FRICTION_ENABLED,
-            mode=FRICTION_MODE,
-            round_trip_friction_points=ROUND_TRIP_FRICTION_POINTS,
-            commission_per_side_points=COMMISSION_PER_SIDE_POINTS,
-            tax_per_exit_points=TAX_PER_EXIT_POINTS,
-            commission_per_side_ntd=COMMISSION_PER_SIDE_NTD,
-            tax_rate=FRICTION_TAX_RATE,
-            point_value_ntd=POINT_VALUE_NTD,
+        friction = friction_settings_from_mapping(
+            {
+                "enabled": settings.friction_enabled,
+                "mode": settings.friction_mode,
+                "round_trip_friction_points": settings.round_trip_friction_points,
+                "commission_per_side_points": settings.commission_per_side_points,
+                "tax_per_exit_points": settings.tax_per_exit_points,
+                "commission_per_side_ntd": settings.commission_per_side_ntd,
+                "tax_rate": settings.friction_tax_rate,
+                "point_value_ntd": settings.point_value_ntd,
+            }
         )
         performance = compute_performance_from_fills(
-            self.fills, friction, sharpe_period=SHARPE_PERIOD
+            self.fills, friction, sharpe_period=settings.sharpe_period
         )
         return {
             "date": trade_date,
@@ -380,6 +354,8 @@ class DailyObservability:
                     else None
                 ),
                 "tick_type0_pct": round(type0_pct, 2) if type0_pct is not None else None,
+                "tick_type_inferred": dict(self.tick_type_inferred_counts),
+                "tick_type_inferred_total": inferred_total,
                 "lock_wait_max_ms": self.lock_wait_max_ms,
                 "lock_wait_over_50ms": self.lock_wait_over_50ms,
                 "no_tick_resubscribe": self.no_tick_resubscribe,
@@ -401,6 +377,7 @@ class DailyObservability:
         self.lock_wait_over_50ms = 0
         self.no_tick_resubscribe = 0
         self.tick_type_counts = {"0": 0, "1": 0, "2": 0}
+        self.tick_type_inferred_counts = {"1": 0, "2": 0}
         self.atr_min = None
         self.atr_max = None
         self.daily_pnl = 0.0
@@ -410,42 +387,25 @@ class DailyObservability:
 
 
 def build_config_snapshot() -> dict[str, Any]:
-    """Strategy params at summary time — lets AI correlate KPIs with config."""
-    return {
-        "simulation": SIMULATION,
-        "product_code": PRODUCT_CODE,
-        "vwap_window_min": VWAP_WINDOW_MIN,
-        "entry_band_points": ENTRY_BAND_POINTS,
-        "momentum_buy_ratio": MOMENTUM_BUY_RATIO,
-        "momentum_sell_ratio": MOMENTUM_SELL_RATIO,
-        "exhaustion_vol": EXHAUSTION_VOL,
-        "cooldown_sec": COOLDOWN_SEC,
-        "max_daily_loss_points": MAX_DAILY_LOSS_POINTS,
-        "max_consecutive_loss": MAX_CONSECUTIVE_LOSS,
-        "fixed_tp_points": FIXED_TP_POINTS,
-        "trail_points": TRAIL_POINTS,
-        "atr_period": ATR_PERIOD,
-        "min_atr_threshold": MIN_ATR_THRESHOLD,
-        "atr_refresh_sec": ATR_REFRESH_SEC,
-        "atr_kline_lookback_days": ATR_KLINE_LOOKBACK_DAYS,
-        "pending_timeout_sec": PENDING_TIMEOUT_SEC,
-        "ioc_slippage_points": IOC_SLIPPAGE_POINTS,
-        "flatten_slippage_points": FLATTEN_SLIPPAGE_POINTS,
-        "exit_grace_ticks": EXIT_GRACE_TICKS,
-        "exit_grace_sec": EXIT_GRACE_SEC,
-        "hard_stop_points": HARD_STOP_POINTS,
-        "vwap_stop_points": VWAP_STOP_POINTS,
-        "no_tick_timeout_sec": NO_TICK_TIMEOUT_SEC,
-        "base_vol": BASE_VOL,
-        "atr_vol_mult": ATR_VOL_MULT,
-        "open_mult_futures": OPEN_MULT_FUTURES,
-        "open_mult_spot": OPEN_MULT_SPOT,
-        "open_mult_normal": OPEN_MULT_NORMAL,
-        "friction_enabled": FRICTION_ENABLED,
-        "friction_mode": FRICTION_MODE,
-        "round_trip_friction_points": ROUND_TRIP_FRICTION_POINTS,
-        "sharpe_period": SHARPE_PERIOD,
-    }
+    """Strategy params at summary time — Settings + live module constants for sweep."""
+    import config as cfg
+    from strategy_config import SWEEP_FIELD_TO_CONST
+
+    snap = asdict(cfg.settings)
+    snap.pop("config_path", None)
+    for field, const in SWEEP_FIELD_TO_CONST.items():
+        if hasattr(cfg, const):
+            snap[field] = getattr(cfg, const)
+    for key in (
+        "session_start",
+        "session_end",
+        "session_flatten_time",
+        "session_force_flatten_time",
+    ):
+        value = snap.get(key)
+        if hasattr(value, "strftime"):
+            snap[key] = value.strftime("%H:%M")
+    return snap
 
 
 def format_daily_summary(summary: dict[str, Any]) -> str:

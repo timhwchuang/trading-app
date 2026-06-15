@@ -6,9 +6,11 @@ import unittest
 
 from strategy_phase6 import (
     compute_trend,
+    dynamic_atr_based,
     dynamic_trail_points,
     dynamic_vwap_stop_distance,
     ema,
+    linear_regression_slope,
     resample_closes,
     trend_allows_entry,
     trend_from_ema,
@@ -59,6 +61,14 @@ class TestStrategyPhase6(unittest.TestCase):
         self.assertEqual(direction, "Long")
         flat, _ = trend_from_vwap_slope([100.0, 100.1], min_slope=1.0)
         self.assertEqual(flat, "Flat")
+
+    def test_linear_regression_slope(self):
+        slope = linear_regression_slope([100.0, 101.0, 102.0, 103.0])
+        self.assertAlmostEqual(slope, 1.0)
+
+    def test_dynamic_atr_based_factory(self):
+        self.assertEqual(dynamic_atr_based(10, floor=8, atr_k=0.25), 8.0)
+        self.assertEqual(dynamic_atr_based(100, floor=8, atr_k=0.25), 25.0)
 
     def test_dynamic_trail_floor(self):
         self.assertEqual(

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Callable, Sequence
 
 
 def ema(values: Sequence[float], period: int) -> float | None:
@@ -25,6 +25,20 @@ def resample_closes(closes: Sequence[float], timeframe_min: int) -> list[float]:
     return out
 
 
+def linear_regression_slope(values: Sequence[float]) -> float:
+    """Least-squares slope over index 0..n-1."""
+    n = len(values)
+    if n < 2:
+        return 0.0
+    x_mean = (n - 1) / 2.0
+    y_mean = sum(values) / n
+    num = sum((i - x_mean) * (values[i] - y_mean) for i in range(n))
+    den = sum((i - x_mean) ** 2 for i in range(n))
+    if den == 0:
+        return 0.0
+    return num / den
+
+
 def trend_from_ema(closes: Sequence[float], period: int) -> tuple[str, float]:
     """Return (trend_dir, strength) where strength = last_close - ema."""
     if len(closes) < period:
@@ -44,10 +58,10 @@ def trend_from_ema(closes: Sequence[float], period: int) -> tuple[str, float]:
 def trend_from_vwap_slope(
     closes: Sequence[float], min_slope: float
 ) -> tuple[str, float]:
-    """Slope of resampled closes; strength = abs(slope) when above threshold."""
+    """Linear-regression slope of resampled closes."""
     if len(closes) < 2:
         return "Flat", 0.0
-    slope = (closes[-1] - closes[0]) / (len(closes) - 1)
+    slope = linear_regression_slope(closes)
     strength = abs(round(slope, 2))
     if slope > min_slope:
         return "Long", strength
@@ -82,7 +96,7 @@ def trend_allows_entry(
     return trend_dir == momentum_dir
 
 
-def dynamic_atr_points(
+def dynamic_atr_based(
     atr: float,
     *,
     floor: float,
@@ -99,7 +113,7 @@ def dynamic_trail_points(
     floor: float,
     atr_k: float,
 ) -> float:
-    return dynamic_atr_points(atr, floor=floor, atr_k=atr_k)
+    return dynamic_atr_based(atr, floor=floor, atr_k=atr_k)
 
 
 def dynamic_vwap_stop_distance(
@@ -108,4 +122,14 @@ def dynamic_vwap_stop_distance(
     floor: float,
     atr_k: float,
 ) -> float:
-    return dynamic_atr_points(atr, floor=floor, atr_k=atr_k)
+    return dynamic_atr_based(atr, floor=floor, atr_k=atr_k)
+
+
+def dynamic_atr_points(
+    atr: float,
+    *,
+    floor: float,
+    atr_k: float,
+) -> float:
+    """Alias kept for callers using the older name."""
+    return dynamic_atr_based(atr, floor=floor, atr_k=atr_k)

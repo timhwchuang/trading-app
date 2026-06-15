@@ -10,7 +10,6 @@ from unittest.mock import MagicMock, patch
 
 import config
 import man
-import observability
 from data_loader import ReplayTick
 from observability import build_config_snapshot
 from param_sweep import (
@@ -56,12 +55,10 @@ class TestParamSweep(unittest.TestCase):
     def test_config_restored(self):
         original_man = man.ENTRY_BAND_POINTS
         original_cfg = config.ENTRY_BAND_POINTS
-        original_obs = observability.ENTRY_BAND_POINTS
         saved = _apply_params({"ENTRY_BAND_POINTS": 99.0})
         _restore_params(saved)
         self.assertEqual(man.ENTRY_BAND_POINTS, original_man)
         self.assertEqual(config.ENTRY_BAND_POINTS, original_cfg)
-        self.assertEqual(observability.ENTRY_BAND_POINTS, original_obs)
 
     def test_daily_summary_params_match_sweep(self):
         ticks = [

@@ -73,24 +73,34 @@ def count_momentum_triggers(lines: list[str]) -> int:
     return sum(1 for line in lines if MOMENTUM_TRIGGER_RE.search(line))
 
 
-def build_trade_rounds(audits: list[SignalAudit]) -> list[TradeRound]:
+def build_trade_rounds_from_events(
+    events: list[dict[str, object]],
+) -> list[TradeRound]:
+    """Unified trade-round builder from normalized event dicts."""
     rounds: list[TradeRound] = []
     open_round: TradeRound | None = None
 
-    for audit in audits:
-        if audit.intent == "entry":
+    for event in events:
+        intent = str(event["intent"])
+        if intent == "entry":
             if open_round is not None:
                 rounds.append(open_round)
             open_round = TradeRound(
-                entry_ts=audit.ts,
-                entry_direction=audit.direction,
+                entry_ts=int(event["ts"]),
+                entry_direction=str(event["direction"]),
             )
-        elif audit.intent == "exit":
+        elif intent == "exit":
             if open_round is None:
                 continue
-            open_round.exit_ts = audit.ts
-            open_round.exit_reason = audit.reason
-            open_round.hold_sec = audit.ts - open_round.entry_ts
+            open_round.exit_ts = int(event["ts"])
+            open_round.exit_reason = str(
+                event.get("reason") or event.get("exit_reason") or ""
+            )
+            hold = event.get("hold_sec")
+            if hold is not None:
+                open_round.hold_sec = int(hold)  # type: ignore[arg-type]
+            elif open_round.exit_ts is not None:
+                open_round.hold_sec = open_round.exit_ts - open_round.entry_ts
             rounds.append(open_round)
             open_round = None
 
@@ -98,33 +108,33 @@ def build_trade_rounds(audits: list[SignalAudit]) -> list[TradeRound]:
         rounds.append(open_round)
 
     return rounds
+
+
+def build_trade_rounds(audits: list[SignalAudit]) -> list[TradeRound]:
+    events = [
+        {
+            "intent": audit.intent,
+            "ts": audit.ts,
+            "direction": audit.direction,
+            "reason": audit.reason if audit.intent == "exit" else "",
+        }
+        for audit in audits
+    ]
+    return build_trade_rounds_from_events(events)
 
 
 def build_trade_rounds_from_fills(fills: list[FillAudit]) -> list[TradeRound]:
-    rounds: list[TradeRound] = []
-    open_round: TradeRound | None = None
-
-    for fill in fills:
-        if fill.intent == "entry":
-            if open_round is not None:
-                rounds.append(open_round)
-            open_round = TradeRound(
-                entry_ts=fill.ts,
-                entry_direction=fill.direction,
-            )
-        elif fill.intent == "exit":
-            if open_round is None:
-                continue
-            open_round.exit_ts = fill.ts
-            open_round.exit_reason = fill.exit_reason
-            open_round.hold_sec = fill.hold_sec
-            rounds.append(open_round)
-            open_round = None
-
-    if open_round is not None:
-        rounds.append(open_round)
-
-    return rounds
+    events = [
+        {
+            "intent": fill.intent,
+            "ts": fill.ts,
+            "direction": fill.direction,
+            "exit_reason": fill.exit_reason,
+            "hold_sec": fill.hold_sec,
+        }
+        for fill in fills
+    ]
+    return build_trade_rounds_from_events(events)
 
 
 def _percentile(values: list[float], pct: float) -> float | None:
@@ -206,13 +216,9 @@ def parse_daily_summaries(lines: list[str]) -> list[dict]:
     return summaries
 
 
-def compute_metrics(
+def parse_log_audits_and_fills(
     lines: list[str],
-    *,
-    quick_sl_sec: int = 5,
-    friction: FrictionSettings | None = None,
-) -> dict:
-    momentum_triggers = count_momentum_triggers(lines)
+) -> tuple[list[SignalAudit], list[FillAudit]]:
     audits = [
         audit
         for line in lines
@@ -221,12 +227,25 @@ def compute_metrics(
     fills = [
         fill for line in lines if (fill := parse_fill_audit_line(line)) is not None
     ]
-    entries = [a for a in audits if a.intent == "entry"]
-    exits = [a for a in audits if a.intent == "exit"]
-    rounds = build_trade_rounds_from_fills(fills) if fills else build_trade_rounds(audits)
-    completed = [r for r in rounds if r.exit_ts is not None]
+    return audits, fills
 
+
+def compute_trade_rounds(
+    audits: list[SignalAudit], fills: list[FillAudit]
+) -> list[TradeRound]:
+    if fills:
+        return build_trade_rounds_from_fills(fills)
+    return build_trade_rounds(audits)
+
+
+def compute_quick_sl_metrics(
+    *,
+    rounds: list[TradeRound],
+    fills: list[FillAudit],
+    quick_sl_sec: int,
+) -> tuple[int, float | None, list[dict]]:
     stop_loss_reasons = {"stop_loss", "stop_loss_vwap"}
+    completed = [r for r in rounds if r.exit_ts is not None]
     quick_stop_loss_rounds = [
         r
         for r in completed
@@ -241,35 +260,39 @@ def compute_metrics(
         and f.exit_reason in stop_loss_reasons
         and f.hold_sec < quick_sl_sec
     ]
-
-    exit_reasons: dict[str, int] = {}
-    for audit in exits:
-        exit_reasons[audit.reason] = exit_reasons.get(audit.reason, 0) + 1
-
-    cancel_counts = count_intent_cancelled(lines)
-    daily_summaries = parse_daily_summaries(lines)
-    tick_type = latest_tick_type_line(lines)
-
-    conversion_rate = (
-        len(entries) / momentum_triggers if momentum_triggers else None
-    )
     quick_sl_count = (
         len(quick_stop_loss_fills) if fills else len(quick_stop_loss_rounds)
     )
     quick_sl_rate = quick_sl_count / len(completed) if completed else None
-    cancel_rate = (
-        cancel_counts["intent_cancelled"] / len(entries) if entries else None
+    examples = (
+        [
+            {
+                "direction": f.direction,
+                "exit_ts": f.ts,
+                "hold_sec": f.hold_sec,
+                "exit_reason": f.exit_reason,
+                "slippage_pts": f.slippage_pts,
+            }
+            for f in quick_stop_loss_fills[:10]
+        ]
+        if fills
+        else [
+            {
+                "direction": r.entry_direction,
+                "entry_ts": r.entry_ts,
+                "exit_ts": r.exit_ts,
+                "hold_sec": r.hold_sec,
+                "exit_reason": r.exit_reason,
+            }
+            for r in quick_stop_loss_rounds[:10]
+        ]
     )
-    open_cancel_rate = (
-        cancel_counts["intent_cancelled_open_session"] / len(entries)
-        if entries
-        else None
-    )
+    return quick_sl_count, quick_sl_rate, examples
 
-    near_miss = None
-    if daily_summaries:
-        near_miss = daily_summaries[-1].get("near_miss")
 
+def resolve_friction_settings(
+    friction: FrictionSettings | None,
+) -> tuple[FrictionSettings, str]:
     if friction is None:
         try:
             from config import (
@@ -294,24 +317,30 @@ def compute_metrics(
                 tax_rate=FRICTION_TAX_RATE,
                 point_value_ntd=POINT_VALUE_NTD,
             )
-            sharpe_period = SHARPE_PERIOD
+            return friction, SHARPE_PERIOD
         except Exception:
-            friction = FrictionSettings()
-            sharpe_period = "per_trade"
-    else:
-        try:
-            from config import SHARPE_PERIOD as sharpe_period
-        except Exception:
-            sharpe_period = "per_trade"
+            return FrictionSettings(), "per_trade"
+    try:
+        from config import SHARPE_PERIOD as sharpe_period
+    except Exception:
+        sharpe_period = "per_trade"
+    return friction, sharpe_period
 
+
+def compute_performance_block(
+    fills: list[FillAudit],
+    daily_summaries: list[dict],
+    friction: FrictionSettings,
+    sharpe_period: str,
+) -> tuple[dict, dict]:
     fill_dicts = [asdict(f) for f in fills]
     performance = compute_performance_from_fills(
         fill_dicts, friction, sharpe_period=sharpe_period
     )
     performance_aggregate = aggregate_daily_performance(daily_summaries)
-    if not performance_aggregate.get("trade_count") and performance.get("expectancy", {}).get(
-        "trade_count"
-    ):
+    if not performance_aggregate.get("trade_count") and performance.get(
+        "expectancy", {}
+    ).get("trade_count"):
         performance_aggregate = {
             "trade_count": performance["expectancy"]["trade_count"],
             "total_pnl_gross": performance.get("total_pnl_gross", 0.0),
@@ -324,6 +353,57 @@ def compute_metrics(
                 "max_drawdown_points"
             ),
         }
+    return performance, performance_aggregate
+
+
+def compute_metrics(
+    lines: list[str],
+    *,
+    quick_sl_sec: int = 5,
+    friction: FrictionSettings | None = None,
+) -> dict:
+    momentum_triggers = count_momentum_triggers(lines)
+    audits, fills = parse_log_audits_and_fills(lines)
+    entries = [a for a in audits if a.intent == "entry"]
+    exits = [a for a in audits if a.intent == "exit"]
+    rounds = compute_trade_rounds(audits, fills)
+    completed = [r for r in rounds if r.exit_ts is not None]
+    quick_sl_count, quick_sl_rate, quick_sl_examples = compute_quick_sl_metrics(
+        rounds=rounds,
+        fills=fills,
+        quick_sl_sec=quick_sl_sec,
+    )
+
+    exit_reasons: dict[str, int] = {}
+    for audit in exits:
+        exit_reasons[audit.reason] = exit_reasons.get(audit.reason, 0) + 1
+
+    cancel_counts = count_intent_cancelled(lines)
+    daily_summaries = parse_daily_summaries(lines)
+    tick_type = latest_tick_type_line(lines)
+
+    conversion_rate = (
+        len(entries) / momentum_triggers if momentum_triggers else None
+    )
+    cancel_rate = (
+        cancel_counts["intent_cancelled"] / len(entries) if entries else None
+    )
+    open_cancel_rate = (
+        cancel_counts["intent_cancelled_open_session"] / len(entries)
+        if entries
+        else None
+    )
+
+    near_miss = None
+    if daily_summaries:
+        near_miss = daily_summaries[-1].get("near_miss")
+
+    friction, sharpe_period = resolve_friction_settings(friction)
+    performance, performance_aggregate = compute_performance_block(
+        fills, daily_summaries, friction, sharpe_period
+    )
+    slip = slippage_stats(fills)
+    exp_by_reason = expectancy_by_reason(fills)
 
     return {
         "momentum_triggers": momentum_triggers,
@@ -335,8 +415,8 @@ def compute_metrics(
         f"quick_stop_loss_lt_{quick_sl_sec}s": quick_sl_count,
         f"quick_stop_loss_rate_lt_{quick_sl_sec}s": quick_sl_rate,
         "exit_reasons": exit_reasons,
-        "slippage": slippage_stats(fills),
-        "expectancy_by_reason": expectancy_by_reason(fills),
+        "slippage": slip,
+        "expectancy_by_reason": exp_by_reason,
         "intent_cancelled": cancel_counts,
         "intent_cancel_rate": cancel_rate,
         "open_session_cancel_rate": open_cancel_rate,
@@ -346,34 +426,12 @@ def compute_metrics(
         "performance": performance,
         "performance_aggregate": performance_aggregate,
         "fill_count": len(fills),
-        "quick_stop_loss_examples": (
-            [
-                {
-                    "direction": f.direction,
-                    "exit_ts": f.ts,
-                    "hold_sec": f.hold_sec,
-                    "exit_reason": f.exit_reason,
-                    "slippage_pts": f.slippage_pts,
-                }
-                for f in quick_stop_loss_fills[:10]
-            ]
-            if fills
-            else [
-                {
-                    "direction": r.entry_direction,
-                    "entry_ts": r.entry_ts,
-                    "exit_ts": r.exit_ts,
-                    "hold_sec": r.hold_sec,
-                    "exit_reason": r.exit_reason,
-                }
-                for r in quick_stop_loss_rounds[:10]
-            ]
-        ),
+        "quick_stop_loss_examples": quick_sl_examples,
         "tuning_hints": build_tuning_hints(
             conversion_rate=conversion_rate,
             quick_sl_rate=quick_sl_rate,
-            slippage=slippage_stats(fills),
-            expectancy=expectancy_by_reason(fills),
+            slippage=slip,
+            expectancy=exp_by_reason,
             near_miss=near_miss,
             cancel_rate=open_cancel_rate,
             tick_type=tick_type,
