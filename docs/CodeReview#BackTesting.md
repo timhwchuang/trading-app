@@ -43,7 +43,7 @@ patch、6.8 canonical hash 都有對應實作與測試，純標準庫、無 pand
               self.clock.set(tick.datetime.timestamp())
               self.broker.current_dt = tick.datetime
               ...
-              self.strategy.on_tick(tick)
+              self.host.on_tick(tick)
   ```
 
 **為什麼是致命的**
@@ -74,7 +74,7 @@ patch、6.8 canonical hash 都有對應實作與測試，純標準庫、無 pand
   - (A) 注入「執行器」：`_maybe_refresh_atr` 改為呼叫 `self._run_async(self.refresh_atr)`，
     線上預設 `Thread(...).start()`，回測注入**同步直跑**版本。如此 ATR 在 tick N 當下、以
     tick N 的 `current_dt` 同步算完，確定且無 look-ahead。
-  - (B) 若堅持 `man.py` 一字不改：在 `BacktestEngine` 把 `strategy._maybe_refresh_atr` 換成
+  - (B) 若堅持 `man.py` 一字不改：在 `BacktestEngine` 把 `host._maybe_refresh_atr` 換成
     一個「同步呼叫 `refresh_atr`」的 bound method（屬注入縫，不動策略數學）。
 - 無論採哪個，**請補一個「有真 K 線 + 會進場」的確定性測試**（連跑 3 次同 hash），否則 Phase 4
   形同未驗收。

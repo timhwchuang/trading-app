@@ -305,7 +305,7 @@ def sweep(grid: dict[str, list], dates_train, dates_valid, code, cache_dir) -> l
 
 ## Phase 6：初版 Code Review 修訂（P0/P1）— 已實作
 
-> 本章為 Phase 2–5 初版後的第一輪 review 修訂，**均已落地**。
+> 本章為 Phase 2ㄦ5 初版後的第一輪 review 修訂，**均已落地**。
 > **7.x 章節**為第二輪 review（`CodeReview#BackTesting.md`）修訂，優先於 6.3/6.4 的初版敘述。
 > 實作順序：6.1 → 6.3 → 6.4 → 6.6 → 6.2 → 6.8 → 6.5 → 6.7 → **Phase 7**。
 
@@ -381,8 +381,8 @@ man.py**（違反黃金鐵律）。此舉與線上同構——線上 `simtrade` 
 ```python
 # backtester.run()：只跳過 on_tick，撮合/timeout 仍執行（7.3 修訂）
 if is_trading_session(tick.datetime, SESSION_START, SESSION_END):
-    _pre_tick_refresh_atr(...)
-    self.strategy.on_tick(tick)
+    _pre_tick_refresh_atr(self.host, ...)
+    self.host.on_tick(tick)
 ```
 
 **驗收**：`test_backtester.py::test_premarket_ticks_are_filtered`
@@ -506,7 +506,7 @@ if half_spread is not None:
 
 ## Phase 7：Code Review 落地修訂（`CodeReview#BackTesting.md`）
 
-> Phase 2–6 初版實作後的 review 反饋，**已落地**。優先於初版 2.2 / 6.3 / 6.4 段落。
+> Phase 2ㄦ6 初版實作後的 review 反饋，**已落地**。優先於初版 2.2 / 6.3 / 6.4 段落。
 
 ### 7.1【P0】同步 ATR 注入（修訂背景 thread 問題）
 
@@ -590,7 +590,7 @@ if half_spread is not None:
 | 6 | ✅ | 穿價/timeout/試撮/hash/ATR熱身/bid-ask校準/三模組patch |
 | 7 | ✅ | Code Review 落地（見上） |
 
-分支：`feat/backtest-phase5-param-sweep`（線性含 Phase 2–7 全部 commit）。
+分支：`feat/backtest-phase5-param-sweep`（線性含 Phase 2ㄦ7 全部 commit）。
 
 ---
 
