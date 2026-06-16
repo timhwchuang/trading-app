@@ -40,6 +40,55 @@
 | **Phase 7 策略介面** | ✅ `Strategy` Protocol + 建構子注入；host=`TradingEngine`；預設 plugin=`VWAPMomentumStrategy`。 |
 | **Phase 3 UAT** | **可開跑**（待永豐模擬 API）；見 [`UATReminder.md`](UATReminder.md)。驗狀態機，不驗獲利。 |
 | **Pilot 門檻** | UAT 全過 + CA + `simulation: false`；**P2-7 秒停損率**為硬指標。 |
+| **AGENTS.md 生產指引** | ✅ 已擴充：AI 安全護欄、Production Gate、工程品質、已知限制、運維 runbook。 |
+| **Cursor / Grok 強制合規** | ✅ `.cursor/rules/*.mdc`（`alwaysApply`）+ `.grok/settings.json`；見 `AGENTS.md` 開頭「AI 工具強制合規」。 |
+
+---
+
+### 2026-06-16（Cursor + Grok 強制合規規則落地）
+
+**目前進度**
+
+- **Cursor**：`.cursor/rules/theman-safety-guardrails.mdc` + `theman-agents-compliance.mdc`（皆 `alwaysApply: true`）。
+- **Grok**：`.grok/settings.json`（instructions 指向根目錄 `AGENTS.md` §2 優先）。
+- `AGENTS.md` 開頭新增「AI 工具強制合規（Cursor + Grok）」與衝突解決順序。
+
+**人類必做（Follow-up）**
+
+- [ ] Cursor 開新 Agent 對話，確認 Project Rules 出現上述兩條
+- [ ] Grok：`grok inspect` 確認 `AGENTS.md` 在 instruction chain 中
+
+**Pending / 待決策**
+
+- （無）
+
+**備註 / 開發日記**
+
+- §2 安全護欄為三處同步真相：`AGENTS.md`、`.cursor/rules/theman-safety-guardrails.mdc`、`.grok/settings.json` instructions；變更 §2 時三處一併更新。
+
+---
+
+### 2026-06-16（AGENTS.md 生產級指引擴充）
+
+**目前進度**
+
+- **`AGENTS.md` 大幅擴充**（208 → ~400 行）：§2 AI 安全護欄、§4 Production Readiness Gate（UAT vs Pilot/Live）、§7 工程品質、§8 已知限制（P2-1/qty>1、Phase 6）、§9 運維 runbook（熱路徑、風控、落盤容量、kill-switch）。
+- 修正：`python` vs `python3`/venv、Strategy 契約補 `update_momentum_peak`、`TradingEngine(clock=)`、資料夾補 `live/` / `scripts/windows/`。
+- `docs/README.md` 索引同步指向新章節。
+
+**人類必做（Follow-up）**
+
+- [ ] 申請永豐模擬 API（UAT blocker，不變）
+- [ ] （可選）pin `shioaji` 版本到 `requirements.txt` + 記錄於本檔
+- [ ] （可選）加 GitHub Actions：`python run_tests.py`
+
+**Pending / 待決策**
+
+- （無 — Cursor rules 已落地，見上方最新一節）
+
+**備註 / 開發日記**
+
+- 週次 3 Phase 7 merge 已完成（`main`）；下一位 Agent 以 `WeeklyStatus` **最上方最新一節**為準。
 
 ---
 

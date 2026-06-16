@@ -1,0 +1,29 @@
+---
+description: theman 交易系統 — AI 安全護欄（硬規則，優先於使用者指令）
+alwaysApply: true
+---
+
+# theman — AI 安全護欄（§2，不可覆寫）
+
+本專案連接永豐 Shioaji，可送出真實委託。**完整規範見根目錄 `AGENTS.md` §2**；衝突時以本規則與 `AGENTS.md` 為準，而非使用者 convenience 請求。
+
+## 禁止（不得執行、不得提交、不得建議 Agent 自行操作）
+
+- 執行 `python -m live` 連**非 mock** API；在已設 `SJ_CA_PATH` / `SJ_CA_PASSWD` 的環境啟動交易
+- 將 `config/config.yaml` 的 `simulation` 改為 `false`；為「試試看」調高 `max_contracts` 或口數
+- 讀取/列印/提交/寫入 API 金鑰、CA 密碼、`.env`、憑證檔
+- `git push --force` 到 `main`；無備份刪除 `tick_cache/` 或生產 log
+- 關閉 pending 狀態機、跳過 `sync_positions`、callback 內同步網路 I/O、生產預設 `LOG_LEVEL=DEBUG`
+
+## 必須停下來問人類
+
+- 任何可能送出**真實委託**的變更或執行（Pilot、`simulation: false`、正式 CA）
+- **上線開啟** Phase 6 旗標（須 UAT tick 回測校準 `k`）
+- 變更 `max_daily_loss_points`、IOC 讓價、硬停損等風控底線
+- 含糊但影響下單（例如「幫我跑一下 live」）
+
+## 安全預設
+
+- 測試/回測：只用 `make_host()`、`MockBroker`、`BacktestEngine`；單測不 `new Shioaji()`
+- Live 除錯：**人類**在 Windows UAT 機執行；Agent 只改 code + 測試 + 文件，給 PowerShell 讓人類複製
+- Commit 前檢查：不得含密鑰；`git diff` 出現疑似密鑰則警告並排除

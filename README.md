@@ -129,6 +129,8 @@ python -m live
 
 | 檔案                                           | 內容                                       |
 | ---------------------------------------------- | ------------------------------------------ |
+| [`AGENTS.md`](AGENTS.md)                       | **AI 協作守則**（Cursor + Grok 強制合規）  |
+| [`.cursor/rules/`](.cursor/rules/)             | Cursor 專案規則（`alwaysApply`）           |
 | [`TODO.md`](TODO.md)                           | 開發路線圖、實戰踩坑、UAT / Pilot 檢查清單 |
 | [`docs/UATReminder.md`](docs/UATReminder.md)   | Phase 0 驗收步驟與 log 證據                |
 
