@@ -33,7 +33,12 @@ MOMENTUM_TIMEOUT_SEC = 180
 
 
 class VWAPMomentumStrategy(BaseStrategy):
-    """Pure strategy decisions; momentum episode state lives here."""
+    """VWAP Momentum 策略決策實作（實現 Strategy interface）。
+
+    策略相關參數已封裝在此類別內，透過 `self.params` (StrategyParams) 存取。
+    所有決策邏輯（進場、出場、停損、Phase 6 濾網等）都只依賴傳入的 snapshots 與 self.params，
+    不直接依賴全域 config（sweep patch 機制除外，屬於測試基礎設施）。
+    """
 
     def __init__(
         self,

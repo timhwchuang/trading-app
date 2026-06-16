@@ -1,4 +1,12 @@
-"""Strategy parameter bundle — reads live values from ``config`` for sweep compatibility."""
+"""Strategy parameter bundle.
+
+Concrete strategies (e.g. VWAPMomentumStrategy) own an instance of this.
+It reads from the central config for convenience + supports the sweep / param-sweep
+monkey-patching mechanism.
+
+For better encapsulation in the future, strategies can define their own
+parameter dataclasses and load only the subset they care about from a config section.
+"""
 
 from __future__ import annotations
 
