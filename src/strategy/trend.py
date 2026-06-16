@@ -20,11 +20,22 @@ from typing import Callable, Sequence
 
 
 def ema(values: Sequence[float], period: int) -> float | None:
+    """Compute EMA over the series.
+
+    Initialization uses SMA of the first 'period' values as seed (standard
+    warmup) instead of seeding from values[0] only. This reduces first-bar
+    overweight bias.
+
+    When called with exactly 'period' values (current usage pattern in
+    trend_from_ema), this reduces to SMA of the window.
+    The result is then compared as 'last vs SMA/EMA of recent HTF window'.
+    """
     if period <= 0 or len(values) < period:
         return None
     k = 2.0 / (period + 1)
-    ema_val = values[0]
-    for price in values[1:]:
+    # Proper warmup: SMA of first period bars as initial EMA value
+    ema_val = sum(values[:period]) / period
+    for price in values[period:]:
         ema_val = price * k + ema_val * (1 - k)
     return ema_val
 
@@ -74,8 +85,14 @@ def linear_regression_slope(values: Sequence[float]) -> float:
 def trend_from_ema(closes: Sequence[float], period: int) -> tuple[str, float]:
     """Return (trend_dir, strength) on resampled HTF closes.
 
-    strength = |last - ema| (always non-negative when Long/Short).
+    Uses ema() (now SMA-seeded for the window) on the last 'period' resampled bars.
+    strength = last - ema_val (signed for Long, positive abs for Short).
+    This is effectively 'current price vs SMA/EMA of the recent HTF window'.
+
     Caller (compute_trend) may further downgrade to Flat based on min_strength.
+    Note: not a full multi-period recursive EMA with long history; it is a
+    short-window displacement / average comparison (common practical proxy
+    for intraday HTF bias).
     """
     if len(closes) < period:
         return "Flat", 0.0
