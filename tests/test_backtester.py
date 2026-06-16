@@ -35,20 +35,20 @@ class TestBacktestEngine(unittest.TestCase):
         tick2 = ReplayTick(t1, "18001", 1, 0)
         engine = BacktestEngine("TXFR1", [t0.date()])
         pending_at_on_tick: list[bool] = []
-        original_on_tick = engine.strategy.on_tick
+        original_on_tick = engine.host.on_tick
 
         def spy_on_tick(tick):
-            pending_at_on_tick.append(engine.strategy.is_pending)
+            pending_at_on_tick.append(engine.host.is_pending)
             return original_on_tick(tick)
 
-        engine.strategy.on_tick = spy_on_tick
+        engine.host.on_tick = spy_on_tick
 
         def fake_replay(_code, _dates, cache_dir=None):
             yield tick1
-            engine.strategy.is_pending = True
-            engine.strategy.pending_since = t0.timestamp()
-            engine.strategy.pending_order_id = "BT1"
-            engine.strategy.pending_intent = "entry"
+            engine.host.is_pending = True
+            engine.host.pending_since = t0.timestamp()
+            engine.host.pending_order_id = "BT1"
+            engine.host.pending_intent = "entry"
             yield tick2
 
         with patch("backtest.replay.iter_replay_ticks", fake_replay):
@@ -66,13 +66,13 @@ class TestBacktestEngine(unittest.TestCase):
         ]
         engine = BacktestEngine("TXFR1", [datetime.date(2026, 6, 12)])
         seen: list[datetime.datetime] = []
-        original_on_tick = engine.strategy.on_tick
+        original_on_tick = engine.host.on_tick
 
         def track(tick):
             seen.append(tick.datetime)
             return original_on_tick(tick)
 
-        engine.strategy.on_tick = track
+        engine.host.on_tick = track
         with patch("backtest.replay.iter_replay_ticks", return_value=iter(ticks)):
             engine.run()
         self.assertEqual(len(seen), 1)
@@ -98,13 +98,13 @@ class TestBacktestEngine(unittest.TestCase):
             account=None,
         )
         trade = engine.broker.place_order(contract, order)
-        engine.strategy.pending_order_id = str(trade.order.id)
-        engine.strategy.pending_intent = "entry"
-        engine.strategy.is_pending = True
+        engine.host.pending_order_id = str(trade.order.id)
+        engine.host.pending_intent = "entry"
+        engine.host.is_pending = True
         events: list[tuple] = []
         on_tick_times: list[datetime.time] = []
-        original_handle = engine.strategy.handle_order_event
-        original_on_tick = engine.strategy.on_tick
+        original_handle = engine.host.handle_order_event
+        original_on_tick = engine.host.on_tick
 
         def capture(stat, msg):
             events.append((stat, msg))
@@ -114,8 +114,8 @@ class TestBacktestEngine(unittest.TestCase):
             on_tick_times.append(tick.datetime.time())
             return original_on_tick(tick)
 
-        engine.strategy.handle_order_event = capture
-        engine.strategy.on_tick = spy_on_tick
+        engine.host.handle_order_event = capture
+        engine.host.on_tick = spy_on_tick
 
         def fake_replay(_code, _dates, cache_dir=None):
             yield premarket_tick

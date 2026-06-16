@@ -21,7 +21,6 @@ from config import (
     MAX_DAILY_LOSS_POINTS,
     PENDING_TIMEOUT_SEC,
     SESSION_END,
-    SESSION_FLATTEN_TIME,
     SESSION_FORCE_FLATTEN_TIME,
     SESSION_START,
     SIMULATION,
@@ -131,7 +130,6 @@ class OrderExecutorMixin:
             self._risk_gate(ts, dt),
             vol_threshold,
             session_force_flatten_time=SESSION_FORCE_FLATTEN_TIME,
-            session_flatten_time=SESSION_FLATTEN_TIME,
             max_daily_loss_points=MAX_DAILY_LOSS_POINTS,
             on_daily_loss_block=lambda: logger.warning(
                 "觸發單日最大虧損，停止新進場"
@@ -145,7 +143,7 @@ class OrderExecutorMixin:
         self.strategy.activate_momentum(direction, price, ts)
 
     def reset_momentum(self):
-        self.strategy.reset_momentum()
+        self.strategy.reset()
 
     def manage_exit(self, price: float, ts: int) -> Optional[OrderSignal]:
         dt = self._last_tick_exchange_dt or datetime.datetime.fromtimestamp(ts)

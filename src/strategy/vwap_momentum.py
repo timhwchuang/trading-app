@@ -45,8 +45,11 @@ class VWAPMomentumStrategy(BaseStrategy):
         params: StrategyParams | None = None,
         obs: Optional[DailyObservability] = None,
     ) -> None:
+        super().__init__()
         self.params = params or StrategyParams.from_config()
         self.obs = obs
+
+    def reset(self) -> None:
         self.momentum = MomentumState(
             active=False,
             direction="None",
@@ -55,12 +58,7 @@ class VWAPMomentumStrategy(BaseStrategy):
         )
 
     def reset_momentum(self) -> None:
-        self.momentum = MomentumState(
-            active=False,
-            direction="None",
-            peak=0.0,
-            trigger_time=0,
-        )
+        self.reset()
 
     def activate_momentum(self, direction: str, price: float, ts: int) -> None:
         self.momentum = MomentumState(
@@ -87,7 +85,6 @@ class VWAPMomentumStrategy(BaseStrategy):
         vol_threshold: tuple[float, float, float],
         *,
         session_force_flatten_time: datetime.time,
-        session_flatten_time: datetime.time,
         max_daily_loss_points: float,
         on_daily_loss_block: Callable[[], None] | None = None,
     ) -> tuple[Optional[OrderSignal], StrategySideEffects]:
@@ -96,7 +93,7 @@ class VWAPMomentumStrategy(BaseStrategy):
         if not risk.api_connected:
             if position.has_position:
                 if risk.force_flatten:
-                    return self._session_force_flatten_signal(
+                    return self.session_force_flatten_signal(
                         market, position, session_force_flatten_time
                     )
                 return self.manage_exit(market, position)
@@ -119,7 +116,7 @@ class VWAPMomentumStrategy(BaseStrategy):
 
         if position.has_position:
             if risk.force_flatten:
-                return self._session_force_flatten_signal(
+                return self.session_force_flatten_signal(
                     market, position, session_force_flatten_time
                 )
             return self.manage_exit(market, position)
@@ -223,12 +220,12 @@ class VWAPMomentumStrategy(BaseStrategy):
             market.price,
             "entry",
             exchange_ts=market.ts,
-            audit=self._build_entry_audit(
+            audit=self.build_entry_audit(
                 market, audit_dir, multiplier, threshold
             ),
         )
 
-    def _build_entry_audit(
+    def build_entry_audit(
         self,
         market: MarketSnapshot,
         direction: str,
@@ -258,7 +255,7 @@ class VWAPMomentumStrategy(BaseStrategy):
             trend_strength=market.trend_strength,
         )
 
-    def _build_exit_audit(
+    def build_exit_audit(
         self,
         market: MarketSnapshot,
         direction: str,
@@ -351,7 +348,7 @@ class VWAPMomentumStrategy(BaseStrategy):
                         market.price,
                         "exit",
                         exchange_ts=market.ts,
-                        audit=self._build_exit_audit(
+                        audit=self.build_exit_audit(
                             market, "Sell", reason, trail_points_used=trail_pts
                         ),
                     ),
@@ -378,7 +375,7 @@ class VWAPMomentumStrategy(BaseStrategy):
                         market.price,
                         "exit",
                         exchange_ts=market.ts,
-                        audit=self._build_exit_audit(
+                        audit=self.build_exit_audit(
                             market, "Buy", reason, trail_points_used=trail_pts
                         ),
                     ),
@@ -386,7 +383,7 @@ class VWAPMomentumStrategy(BaseStrategy):
                 )
         return None, StrategySideEffects()
 
-    def _session_force_flatten_signal(
+    def session_force_flatten_signal(
         self,
         market: MarketSnapshot,
         position: PositionSnapshot,
@@ -407,7 +404,7 @@ class VWAPMomentumStrategy(BaseStrategy):
                 "exit",
                 exchange_ts=market.ts,
                 slippage_points=self.params.flatten_slippage_points,
-                audit=self._build_exit_audit(
+                audit=self.build_exit_audit(
                     market, action, "session_force_flatten"
                 ),
             ),

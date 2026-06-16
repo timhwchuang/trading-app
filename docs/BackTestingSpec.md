@@ -65,24 +65,24 @@ class BacktestEngine:
     def __init__(self, code: str, dates: list[datetime.date], cache_dir=...):
         self.clock = VirtualClock()
         self.broker = MockBroker(clock=self.clock, cache_dir=cache_dir)
-        self.strategy = TradingEngine(api=self.broker, clock=self.clock)
-        self.strategy.contract = self.broker.resolve_contract(code)
+        self.host = TradingEngine(api=self.broker, clock=self.clock)
+        self.host.contract = self.broker.resolve_contract(code)
         # 7.1：阻擋 on_tick 內的背景 thread ATR；改由 run() 同步刷新
-        self.strategy._maybe_refresh_atr = _noop_maybe_refresh_atr
+        self.host._maybe_refresh_atr = _noop_maybe_refresh_atr
         self.code, self.dates, self.cache_dir = code, dates, cache_dir
 
     def run(self) -> None:
         for tick in iter_replay_ticks(self.code, self.dates, cache_dir=self.cache_dir):
             self.clock.set(tick.datetime.timestamp())      # 1. 推進虛擬時鐘
             self.broker.current_dt = tick.datetime         # 供 kbars 時間過濾
-            self.broker.process_matching_queue(tick, self.strategy)  # 2. 撮合（先於 timeout）
-            self.strategy._check_pending_timeout()       # 3. 超時（虛擬時鐘驅動）
+            self.broker.process_matching_queue(tick, self.host)  # 2. 撮合（先於 timeout）
+            self.host._check_pending_timeout()       # 3. 超時（虛擬時鐘驅動）
             if is_trading_session(tick.datetime, SESSION_START, SESSION_END):
-                _pre_tick_refresh_atr(self.strategy, int(tick.datetime.timestamp()))  # 4. 同步 ATR
-                self.strategy.on_tick(tick)                # 5. 決策（同一份邏輯）
-        if self.strategy._last_tick_exchange_dt is not None:
-            self.strategy._emit_daily_summary(
-                self.strategy._last_tick_exchange_dt.date()
+                _pre_tick_refresh_atr(self.host, int(tick.datetime.timestamp()))  # 4. 同步 ATR
+                self.host.on_tick(tick)                # 5. 決策（同一份邏輯）
+        if self.host._last_tick_exchange_dt is not None:
+            self.host._emit_daily_summary(
+                self.host._last_tick_exchange_dt.date()
             )
 ```
 
@@ -515,7 +515,7 @@ if half_spread is not None:
 若在 `on_tick` 持 lock 時同步呼叫 `refresh_atr()` 會死鎖（`refresh_atr` 內部再搶 lock）。
 
 **修訂（不動 `man.py` 決策邏輯）**：
-1. `BacktestEngine.__init__`：`strategy._maybe_refresh_atr = _noop_maybe_refresh_atr`
+1. `BacktestEngine.__init__`：`host._maybe_refresh_atr = _noop_maybe_refresh_atr`
 2. `run()` 內、**`on_tick` 之前且無 lock 時**：`_pre_tick_refresh_atr(strategy, ts)`
    同步呼叫 `refresh_atr()`
 

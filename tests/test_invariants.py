@@ -143,7 +143,7 @@ class TestIntentCancelledTag(unittest.TestCase):
             2026, 6, 10, 8, 50
         )
 
-        with self.assertLogs("man", level="INFO") as logs:
+        with self.assertLogs("theman", level="INFO") as logs:
             strategy._handle_futures_order(
                 {
                     "trade_id": "ord-1",
@@ -167,7 +167,7 @@ class TestRawOrderEventDump(unittest.TestCase):
         msg = {"price": "18000", "quantity": 1, "action": "Buy"}
 
         with patch("config.DUMP_ORDER_EVENTS", True):
-            with self.assertLogs("man", level="INFO") as logs:
+            with self.assertLogs("theman", level="INFO") as logs:
                 strategy.handle_order_event(OrderState.FuturesDeal, msg)
                 strategy.handle_order_event(OrderState.FuturesDeal, msg)
                 strategy.handle_order_event(OrderState.FuturesOrder, {"status": {}})

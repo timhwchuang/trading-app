@@ -1,19 +1,18 @@
 """Pluggable trading strategies.
 
-Strategies implement the `Strategy` protocol (see `base.py`).
+Strategies implement the ``Strategy`` protocol (see ``base.py``) and are injected
+into ``runtime.TradingEngine`` or ``backtest.BacktestEngine`` via ``strategy=``.
 
-The execution host (`runtime.TradingEngine`) and backtesting host
-(`backtest.BacktestEngine`) are generic — they accept any strategy that
-satisfies the interface via constructor injection.
+Example::
 
-Example:
-    from strategy.base import Strategy
+    from strategy.base import BaseStrategy
     from runtime.engine import TradingEngine
-    from backtest.engine import BacktestEngine
 
-    class MyStrategy(BaseStrategy): ...
+    class MyStrategy(BaseStrategy):
+        def evaluate(self, ...):
+            return None, StrategySideEffects()
+
     engine = TradingEngine(strategy=MyStrategy())
-    backtester = BacktestEngine(..., strategy=MyStrategy())
 """
 
 from strategy.base import BaseStrategy, Strategy, StrategySideEffects

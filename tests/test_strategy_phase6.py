@@ -101,7 +101,7 @@ class _DummyStrategy(BaseStrategy):
     def evaluate(self, *a, **k):
         return None, StrategySideEffects()
 
-    def reset(self):
+    def reset(self) -> None:
         pass
 
 
@@ -122,9 +122,8 @@ class TestStrategyInterfaceInjection(unittest.TestCase):
 
         self.assertIs(host.strategy, dummy)
 
-    @unittest.expectedFailure
     def test_custom_strategy_survives_one_tick(self):
-        """Host still requires VWAP-specific API; fails until Phase 7 widens Protocol."""
+        """Injected BaseStrategy subclass must survive a full on_tick pass."""
         from runtime.engine import TradingEngine
 
         dummy = _DummyStrategy()

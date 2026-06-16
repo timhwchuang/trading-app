@@ -44,17 +44,17 @@ class BacktestEngine:
         cache_dir=DEFAULT_CACHE_DIR,
         strategy: Strategy | None = None,
     ) -> None:
-        """strategy: pluggable decision Strategy (see strategy.base.Strategy).
+        """strategy: pluggable decision logic (see strategy.base.Strategy).
         If None, the default VWAP momentum strategy is used.
         """
         self.clock = VirtualClock()
         self.broker = MockBroker(clock=self.clock, cache_dir=cache_dir)
-        self.strategy = TradingEngine(
+        self.host = TradingEngine(
             api=self.broker, clock=self.clock, strategy=strategy
         )
-        self.strategy.contract = self.broker.resolve_contract(code)
-        self.strategy._maybe_refresh_atr = _noop_maybe_refresh_atr
-        self.strategy._order_sync_mode = True
+        self.host.contract = self.broker.resolve_contract(code)
+        self.host._maybe_refresh_atr = _noop_maybe_refresh_atr
+        self.host._order_sync_mode = True
         self.code = code
         self.dates = dates
         self.cache_dir = cache_dir
@@ -66,14 +66,14 @@ class BacktestEngine:
             self.clock.set(tick.datetime.timestamp())
             self.broker.current_dt = tick.datetime
             # Match before timeout so cold-gap ticks can fill/cancel in-flight IOC.
-            self.broker.process_matching_queue(tick, self.strategy)
-            self.strategy._check_pending_timeout()
+            self.broker.process_matching_queue(tick, self.host)
+            self.host._check_pending_timeout()
             if is_trading_session(tick.datetime, SESSION_START, SESSION_END):
                 _pre_tick_refresh_atr(
-                    self.strategy, int(tick.datetime.timestamp())
+                    self.host, int(tick.datetime.timestamp())
                 )
-                self.strategy.on_tick(tick)
-        if self.strategy._last_tick_exchange_dt is not None:
-            self.strategy._emit_daily_summary(
-                self.strategy._last_tick_exchange_dt.date()
+                self.host.on_tick(tick)
+        if self.host._last_tick_exchange_dt is not None:
+            self.host._emit_daily_summary(
+                self.host._last_tick_exchange_dt.date()
             )

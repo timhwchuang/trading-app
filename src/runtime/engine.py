@@ -264,7 +264,7 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
         vol_threshold = self._vol_threshold(dt)
         market = self.indicators.snapshot(ts, price, dt)
         base_vol, multiplier, threshold = vol_threshold
-        return self.strategy._build_entry_audit(
+        return self.strategy.build_entry_audit(
             market, direction, multiplier, threshold
         )
 
@@ -279,7 +279,7 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
     ) -> SignalAudit:
         dt = self._last_tick_exchange_dt or datetime.datetime.fromtimestamp(ts)
         market = self.indicators.snapshot(ts, price, dt)
-        return self.strategy._build_exit_audit(
+        return self.strategy.build_exit_audit(
             market, direction, reason, trail_points_used=trail_points_used
         )
 
@@ -288,7 +288,7 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
     ) -> OrderSignal:
         dt = self._last_tick_exchange_dt or datetime.datetime.fromtimestamp(ts)
         market = self.indicators.snapshot(ts, price, dt)
-        signal, _effects = self.strategy._session_force_flatten_signal(
+        signal, _effects = self.strategy.session_force_flatten_signal(
             market,
             self._position_snapshot(),
             SESSION_FORCE_FLATTEN_TIME,
