@@ -445,17 +445,17 @@ class OrderExecutorMixin:
     ) -> bool:
         """套用成交。回傳 True 表示須在 lock 外呼叫 sync_positions()。"""
         expected = self.pending_qty if self.pending_qty > 0 else 1
-        if deal_qty < expected:
-            logger.critical(
-                "部分成交 | intent=%s expected=%d got=%d order=%s | "
-                "解鎖 pending，改以券商對帳為準",
+        self.filled_qty = getattr(self, "filled_qty", 0) + deal_qty
+        if self.filled_qty < expected:
+            logger.info(
+                "部分成交進度 | intent=%s %d/%d (deal=%d) order=%s | pending 持續（IOC 未結束不全解鎖）",
                 self.pending_intent,
+                self.filled_qty,
                 expected,
                 deal_qty,
                 self.pending_order_id,
             )
-            self._clear_pending()
-            return True
+            return False  # keep pending for more fills or cancel
 
         intent = self.pending_intent
         order_id = self.pending_order_id or ""

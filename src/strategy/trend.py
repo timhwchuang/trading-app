@@ -12,6 +12,14 @@ Trend filter (P6-1 Level 2):
 - This gives real practical value: small noisy HTF drifts no longer create false
   "with-trend" or "counter-trend" signals, while real legs on the day can protect
   against fading micro-momentum in the wrong direction.
+
+P6-1-CAL-4 命名誠實化：
+- `trend_ema_period` / `trend_timeframe_min` 定義的「有效尺度」≈ timeframe_min × ema_period（分鐘）。
+  這是 short-window displacement / slope proxy（intraday HTF bias veto），**不是**真正日內或跨日 macro bias。
+  實際 regime power 仍來自 resample + min_strength (ATR units) + Level 2 gating。
+- 建議文件 alias 概念：trend_ema_period 可視為 trend_window_bars（HTF bars 數），但 yaml key 維持不變以相容。
+- 校準 SOP 見 docs/BackTestingSpec.md「P6-1 Trend Filter Calibration Workflow」與 TODO P6-1-CAL-4/5。
+  所有真實 delta / veto_rate 必須來自 UAT tick 後的 harness + sweep；本處僅語意說明。
 """
 
 from __future__ import annotations

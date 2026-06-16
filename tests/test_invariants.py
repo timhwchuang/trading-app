@@ -60,17 +60,22 @@ class TestTrailingPeakResync(unittest.TestCase):
 
 
 class TestPartialFillDefense(unittest.TestCase):
-    def test_partial_entry_requests_sync_and_clears_pending(self):
+    def test_partial_entry_keeps_pending_no_full_unlock_P2_1(self):
+        """P2-1: partial (1 of 2) keeps pending (IOC not fully unlocked), no position yet, no sync forced.
+        Old defensive clear+sync is replaced by accum tracking for multi-lot / proper IOC support.
+        """
         host = make_host()
         host.is_pending = True
         host.pending_intent = "entry"
         host.pending_order_id = "ord-1"
         host.pending_qty = 2
+        host.filled_qty = 0
 
         needs_sync = host._apply_deal_fill(18000.0, is_buy=True, deal_qty=1)
 
-        self.assertTrue(needs_sync)
-        self.assertFalse(host.is_pending)
+        self.assertFalse(needs_sync)
+        self.assertTrue(host.is_pending)  # still armed for remaining fill or cancel
+        self.assertEqual(host.filled_qty, 1)
         self.assertFalse(host.has_position)
 
     def test_full_fill_entry_unchanged(self):

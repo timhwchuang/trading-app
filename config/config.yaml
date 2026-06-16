@@ -93,6 +93,9 @@ strategy:
   # (strength / atr). 0.0 = most aggressive (any drift can veto).
   # Higher = looser filter. See full warning + calibration notes in trend.py.
   # Must be UAT-tick calibrated before enabling trend_filter_enabled.
+  # P6-1-CAL-4: effective detection scale ≈ trend_timeframe_min × trend_ema_period (minutes).
+  # This is a short-window intraday HTF bias proxy (resample stride + displacement/slope vs window),
+  # not a true macro or multi-day bias. Calibrate via harness (veto_rate + delta) on real UAT data.
   trend_min_strength: 0.0
   atr_trailing_enabled: false
   trail_atr_k: 0.25

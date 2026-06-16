@@ -575,6 +575,50 @@ if half_spread is not None:
 
 ---
 
+## P6-1 Trend Filter Calibration Workflow（A-class pre-UAT + B-class UAT）— CAL-5 SOP
+
+> **本節為 P6-1-CAL-5 文件化**（accumulate → harness → sweep →  humans Go/No-Go）。  
+> 所有 A-class（1-5）**僅 code + test + docs**；`trend_filter_enabled` 預設 `false`；**不開旗標、不跑 live、不碰 simulation**。真實校準數據來自 UAT 期間 `TICK_ARCHIVE=1` + `KBARS_ARCHIVE=1` 累積的 tick/kbar + SIGNAL_AUDIT（含 `reason=trend_veto`）。
+
+### 流程（鐵律，違反即視為校準失敗）
+1. **Accumulate（數據收集）**  
+   - UAT 機：`TICK_ARCHIVE=1`（必）+ `KBARS_ARCHIVE=1`（強烈建議）。  
+   - 連續數個交易日（目標 ≥5-10 日有 tick + 對應 kbars csv）。  
+   - 每日收盤後自動落盤（P0-11）；無需手動下載歷史。
+
+2. **Harness（條件期望值，P6-1-CAL-2）**  
+   - 使用 `src/reporting/trend_calibration.compute_trend_veto_calibration(veto_audits, allowed_audits, get_forward_pnl=...)`。  
+   - 輸入：從 uat_report / log parse 抽出的 SIGNAL_AUDIT（reason=="trend_veto" 為 veto 候選；其餘 entry 為 allowed）。  
+   - forward PnL policy 必須**文件化**（e.g. 固定 30 根 1m bar、或至 session_force_flatten）。這是 hyperparam。  
+   - 產出：`veto_rate`、`delta_expectancy`（allowed - veto_if_entered）、mean forward、counts。  
+   - A-class 先用 synthetic scenario 驗 harness 正確性（`make_synthetic_veto_scenario` + 5 單測）；B-class 才餵真實 replay。
+
+3. **Sweep（含趨勢參數，P6-1-CAL-3）**  
+   - `sweep( grid_with_trend_min_strength + on/off , dates_train, dates_valid, ...)`。  
+   - 報表每列自動附加 `veto_metrics`（當 params 含 trend_* 時呼叫 harness）。  
+   - 排序仍用 valid survival KPI（net expectancy + MDD _penalty）；veto_rate / delta 作為**額外決策輔助欄位**（非排序主鍵）。  
+   - 目標：產生 `trend_min_strength` 敏感度表（0.0 / 0.3 / 0.5 / 0.8 / 1.0 / 1.5 ATR），觀察 delta 穩定度 + veto_rate 合理區間（典型 5-25% 視市況）。
+
+4. **人類 Go/No-Go（§4.2 Pilot gate，P6-1-CAL-8）**  
+   - **Go**：delta_expectancy 在多日/多參數下穩定為正 + veto_rate 合理（不極端 0 或 100%） + 對整體 net expectancy 有正面或中性貢獻 → 提出校準過的 `trend_min_strength`（非零）供人類核可後才開 `trend_filter_enabled`。  
+   - **No-Go**：維持 `false` + `min_strength=0.0`；或重新設計（真正正交 HTF kbar、session-anchored 等，另開任務）。  
+   - 決策必須有**可追溯的 harness + sweep 報表 + WeeklyStatus 紀錄**；禁止「看起來不錯就開」。
+
+### 驗收條件（A-class 已完成，B-class 待 UAT）
+- A-class：`tests/reporting/test_trend_calibration.py` 5 項全綠；`tests/sweep/test_param_sweep.py` 新增 trend grid 案例含 `veto_metrics` key；`python run_tests.py` 全綠（155+）。
+- 無任何地方把 `trend_filter_enabled` 設 true 或 `min_strength>0` 作為預設/測試行為。
+- 文件同步：本節 + TODO.md 目前狀態 + `trend.py` / `config.yaml` 語意說明（effective scale + 0.0 最嚴格警告）。
+- B-class 後：真實 UAT log 跑 harness 產出有意義的 sensitivity 表 + delta 穩定性；人類簽核後才改 config 並 re-sweep。
+
+### 與既有章節關係
+- 補充 Phase 5 sweep 與 Phase 6 旗標的「校準前置」說明。
+- 不改變任何回測確定性 hash、kbar no-lookahead、或 ATR 熱身規則（CAL-1 切片已另處理）。
+- 與 P6-2/3 ATR 動態成對：趨勢濾網（少做爛單）優先於動態停損（控每筆風險）。
+
+更新日期：2026-06-16（A-class 1-5 程式+測試+文件基建完成；B-class 待永豐模擬 API + tick 累積）。
+
+---
+
 ## 給實作模型的執行順序
 
 1. Phase 3 `MockBroker` + `tests/backtest/test_mock_broker.py`

@@ -45,6 +45,65 @@
 
 ---
 
+### 2026-06-16（P6-1-CAL A-class 1-5 完成：時間切片 + harness + sweep trend + SOP + CQR persona review）
+
+**目前進度**
+- CAL-1~5 A-class（金鑰前、非 UAT blocker）**全部 code + test + docs 落地**（依建議順序，分支+commit+verbatim CQR Chief Quant reviewer persona 直接 review）。
+  - CAL-1：交易所時間切片（`select_recent_trading_days_closes` + trading_day_for_daily_reset 取代 400 magic；regression guard 定量證明「未切片會錯 regime」；mock _KBars.ts 對稱；155 tests OK）。
+  - CAL-2：校準 harness（`trend_calibration.py` 純函式 + synthetic scenario；veto_rate / delta_expectancy / forward PnL；math 修復 + 強制 SYNTHETIC GUARD 後 CQR Pass w/ notes）。
+  - CAL-3：param_sweep 納入 `trend_*` 參數 + 報表自動附加 `veto_metrics`（harness 呼叫；舊 grid 零破壞；結構為真實 UAT 敏感度表預留）。
+  - CAL-4/5：命名誠實化（effective scale ≈ tf × ema_period，非 macro bias；trend_ema_period 語意 + alias 說明）+ BackTestingSpec 新增完整「P6-1 Trend Filter Calibration Workflow」SOP（accumulate → harness → sweep → 決策表 + 驗收條件）。
+- 所有變更**嚴格遵守安全邊界**：`trend_filter_enabled` 永遠 false、`min_strength=0.0`（最嚴格）、無 live/simulation 代碼、無真實 tick 依賴（A-class 全 synthetic）。
+- CQR reviewer persona（對沖基金 Chief Quant，15y+，偏執 edge/overfit/hardcode）已在每個主要 commit 後直接 spawn 執行並 address High 項（guard 真正證明、math 正確、文件誠實、無新 magic）。
+- 目前狀態表 / Changelog / BackTestingSpec 狀態表已同步（AGENTS 紀律）。
+
+**人類必做（Follow-up）**
+- [ ] 申請/取得永豐模擬 API（`TICK_ARCHIVE=1` + `KBARS_ARCHIVE=1` 強制），開始累積真實 tick/kbar + SIGNAL_AUDIT（含 trend_veto），準備 B-class CAL-6/7 真實 harness + sweep。
+- [ ] 週報 / Pilot gate 討論時引用本週 CAL 1-5 基建 + CQR review 結論（「synthetic guard 已就位；真實 delta 穩定為正 + veto_rate 合理才是開旗標前提」）。
+- [ ] merge 各 feat/p6-1-cal-* 後執行一次完整 `python run_tests.py` + 衛生 grep（確認無 stray 400 magic 作用中、flags 預設正確）。
+
+**Pending / 待決策**
+- B-class 真實數據到後，harness + sweep 產出具體 `trend_min_strength` 敏感度表 + delta 穩定性，再做人類 Go/No-Go（維持 0.0 還是調到校準值）。
+- P2-1 部分成交完整支援（Mock + 單測已規劃，可併下一個 iteration；非 UAT blocker）。
+- CI 骨架（PR 強制 `python run_tests.py`）已在 AGENTS + 本次文件強化；.github/workflows 可選後補。
+
+**備註 / 開發日記**
+- 本次完全依照 approved plan + user 要求「切分支下commit 完成後透過 reviewer persona 直接code review」（CQR 逐 branch 執行，output 成為紀錄）。
+- 155 tests（較前增加 harness/sweep guard 案例）；全綠。
+- 後續工作嚴禁跳過 B-class 直接開旗標（違反 TODO + AGENTS + CQR 共識）。
+- 感謝 Chief Quant 的嚴格把關，讓 A-class 基建真正「可量測」而非裝飾。
+
+---
+
+### 2026-06-16（Chief Quant 深度 Code Review：P6-1 Level 2 Trend Filter commits A/B/C）
+
+**目前進度**
+- 針對 3573ef7 (A: ATR 標準化 min_strength)、1773fbc (B: 跨日污染切片 + resample 最新 bar 保證)、31881ca (C: EMA SMA seed + 邊界測試) 完成對沖基金量化研究員級審查（統計優勢、過擬合、硬編碼偏執視角）。 
+- 工程衛生面：ATR 單位正規化、最新 bar 對齊、初始值 bias 移除、文件大幅澄清 min_strength=0 為「最嚴格」而非寬鬆 —— 均屬正面修補先前 review 回饋。
+- **發現 1 個測試 bug**（A 引進的 test_compute_trend_atr_normalization 在 slope 模式數值預期錯誤，已修正，現在正確示範 0.2 vs 0.3 的 gate 行為）。
+- 全測 146 項（含本次新增邊界 case）。
+- 核心診斷：這三個 commit 是「讓 prototype filter 不要太容易在開盤/不同波動下靜默失效」的工程修正，**不是對統計優勢的驗證**。濾網的有效性仍仰賴真實 UAT tick 下的 conditional expectancy（vetoed candidates 的後續實現 P&L）。
+
+**人類必做（Follow-up）**
+- [ ] **申請 / 取得永豐模擬 API** 並以 `TICK_ARCHIVE=1` + `KBARS_ARCHIVE=1` 累積至少 5-10 個交易日的真實 1m tick + kbar（這是 Phase 6 校準的唯一合法數據源）。
+- [ ] 在 UAT 數據累積後，執行/擴充 param_sweep + uat_report 分析：針對 trend_veto 的候選 pullback，計算「若未被 veto 的條件期望值」與「實際 veto 後的後續價格行為」之間的 delta expectancy。**沒有這個數字就不要把 trend_min_strength 從 0 調高或開啟旗標**。
+- [ ] 把 engine.py 裡 `approx_bars_per_trading_day = 400` 這個 TXF 特定 magic number 替換成**基於 kbar 時間戳 + exchange_time 的 session-aware 切片**（「最近 1-2 個完整交易日」）。這是 Live hygiene 硬需求。
+- [ ] Pilot 前再次確認：所有 trend_allows_entry 的決策在 SIGNAL_AUDIT 裡都有完整 trend_dir/strength/atr 紀錄，方便事後 regime 切分績效。
+
+**Pending / 待決策**
+- [ ] 是否值得把目前的「短窗 price displacement / slope」升級為真正統計意義的 regime strength（例如 normalized slope、R² filter、或獨立抓取更高時間框架的 15m kbars 做 anchored trend）？還是維持「輕量 intraday bias veto」定位即可？
+- [ ] trend_min_strength 預設值在 config.yaml 仍為 0.0 —— 保持現狀（文件已極度警告）還是改成一個「明顯無效」的 sentinel（如 -1）強迫使用者顯式設定？
+- [ ] Phase 6 其餘（P6-4 sizing、P6-5 追價）是否要等這波 trend filter 在真實數據上站穩腳步後才動？
+
+**備註 / 開發日記**
+- 作為 Chief Quant 的結論：**UAT 期間可以 merge 這些 commit（已含測試修正）**；它們改善了濾網在 boundary condition 下的可預測性。
+- **嚴禁** 在沒有足夠真實 tick + 對 veto 候選的 forward P&L 量化前，就在 config 裡把 trend_filter_enabled 改 true 或調高 min_strength 去「試試看」。
+- 這套「微觀動能 + pullback + 短窗 HTF veto」的整體 edge，仍然是待證偽的假說。P6-1 的價值最終要用「被它救下來的連續小虧」與「被它錯殺的主升段」兩邊的 realized expectancy 來衡量，而不是單看合成 ramp 測試通過。
+- 下一位 Agent / 人類接手時，請直接從本節 + TODO.md 內部量化 review 區塊開始閱讀，不要只看 commit message。
+- 相關文件已同步：TODO.md 已新增完整 review 摘要（含量化風險分級與必須行動）。
+
+---
+
 ### 2026-06-16（Cursor + Grok 強制合規規則落地）
 
 **目前進度**
