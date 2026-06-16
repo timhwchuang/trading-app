@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 from core.types import OrderSignal
 from order_errors import OrderErrorCategory, classify_order_error, should_retry_order
-from test_helpers import arm_pending_exit, make_strategy
+from test_helpers import arm_pending_exit, make_host
 
 
 class TestOrderErrors(unittest.TestCase):
@@ -44,42 +44,42 @@ class TestOrderErrors(unittest.TestCase):
 
 class TestLiveGuards(unittest.TestCase):
     def test_entry_failure_clears_pending(self):
-        strategy = make_strategy()
-        strategy.contract = MagicMock(code="TXFR1")
-        strategy.api.futopt_account = MagicMock()
-        strategy.api.place_order.side_effect = TimeoutError("timeout")
-        strategy.is_pending = True
-        strategy.pending_intent = "entry"
+        host = make_host()
+        host.contract = MagicMock(code="TXFR1")
+        host.api.futopt_account = MagicMock()
+        host.api.place_order.side_effect = TimeoutError("timeout")
+        host.is_pending = True
+        host.pending_intent = "entry"
 
-        strategy.place_order(OrderSignal("Buy", 1, 18000.0, "entry", exchange_ts=100))
-        self.assertFalse(strategy.is_pending)
+        host.place_order(OrderSignal("Buy", 1, 18000.0, "entry", exchange_ts=100))
+        self.assertFalse(host.is_pending)
 
     def test_exit_failure_keeps_pending_and_schedules_retry(self):
-        strategy = make_strategy()
-        strategy.contract = MagicMock(code="TXFR1")
-        strategy.api.futopt_account = MagicMock()
-        strategy.api.place_order.side_effect = TimeoutError("timeout")
-        arm_pending_exit(strategy)
+        host = make_host()
+        host.contract = MagicMock(code="TXFR1")
+        host.api.futopt_account = MagicMock()
+        host.api.place_order.side_effect = TimeoutError("timeout")
+        arm_pending_exit(host)
 
-        strategy.place_order(
+        host.place_order(
             OrderSignal("Sell", 1, 18000.0, "exit", exchange_ts=200)
         )
-        self.assertTrue(strategy.is_pending)
-        self.assertGreater(strategy._exit_order_retry_at, 0)
+        self.assertTrue(host.is_pending)
+        self.assertGreater(host._exit_order_retry_at, 0)
 
     def test_session_watchdog_triggers_relogin(self):
-        strategy = make_strategy()
-        strategy._api_connected = False
-        strategy._disconnect_since = strategy._clock() - 60
-        strategy._session_relogin_attempts = 0
-        strategy._next_relogin_at = 0
-        strategy.contract = MagicMock(code="TXFR1")
-        strategy.api.login = MagicMock()
-        strategy._on_reconnected = MagicMock()
+        host = make_host()
+        host._api_connected = False
+        host._disconnect_since = host._clock() - 60
+        host._session_relogin_attempts = 0
+        host._next_relogin_at = 0
+        host.contract = MagicMock(code="TXFR1")
+        host.api.login = MagicMock()
+        host._on_reconnected = MagicMock()
 
-        strategy._check_session_watchdog()
-        strategy.api.login.assert_called_once()
-        strategy._on_reconnected.assert_called_once()
+        host._check_session_watchdog()
+        host.api.login.assert_called_once()
+        host._on_reconnected.assert_called_once()
 
 
 if __name__ == "__main__":

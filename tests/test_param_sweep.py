@@ -87,21 +87,21 @@ class TestParamSweep(unittest.TestCase):
         original = config.ENTRY_BAND_POINTS
         saved = _apply_params({"ENTRY_BAND_POINTS": 7.5})
         try:
-            strategy = TradingEngine(api=MagicMock())
-            strategy._api_connected = True
-            strategy.current_vwap = 18000.0
-            strategy.vol_1s = 1
-            strategy.momentum_active = True
-            strategy.momentum_dir = "Long"
-            strategy.momentum_trigger_time = 900
-            strategy.current_atr = 30.0
-            strategy.has_position = False
-            strategy.is_pending = False
-            strategy.consecutive_loss = 0
-            strategy.last_exit_time = 0
+            host = TradingEngine(api=MagicMock())
+            host._api_connected = True
+            host.current_vwap = 18000.0
+            host.vol_1s = 1
+            host.momentum_active = True
+            host.momentum_dir = "Long"
+            host.momentum_trigger_time = 900
+            host.current_atr = 30.0
+            host.has_position = False
+            host.is_pending = False
+            host.consecutive_loss = 0
+            host.last_exit_time = 0
             dt = datetime.datetime(2026, 6, 12, 10, 0, 0)
             self.assertEqual(config.ENTRY_BAND_POINTS, 7.5)
-            signal = strategy.process_strategy(1000, 18000.0, dt)
+            signal = host.process_strategy(1000, 18000.0, dt)
             self.assertIsNotNone(signal)
             self.assertEqual(signal.intent, "entry")
         finally:

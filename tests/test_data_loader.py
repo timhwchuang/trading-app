@@ -17,7 +17,7 @@ from storage.tick_loader import (
     load_ticks_csv,
     save_ticks_csv,
 )
-from test_helpers import make_strategy
+from test_helpers import make_host
 
 
 class TestTaipeiNaive(unittest.TestCase):
@@ -86,42 +86,42 @@ class TestDateRange(unittest.TestCase):
 
 class TestInjectedClock(unittest.TestCase):
     def test_record_tick_arrival_uses_injected_clock(self):
-        strategy = make_strategy()
-        strategy._clock = MagicMock(return_value=12345.0)
-        strategy._record_tick_arrival(
+        host = make_host()
+        host._clock = MagicMock(return_value=12345.0)
+        host._record_tick_arrival(
             100, datetime.datetime(2026, 6, 12, 9, 0), tick_type=1
         )
-        self.assertEqual(strategy._last_tick_wall_time, 12345.0)
-        strategy._clock.assert_called()
+        self.assertEqual(host._last_tick_wall_time, 12345.0)
+        host._clock.assert_called()
 
     def test_pending_timeout_uses_injected_clock(self):
         from config import PENDING_TIMEOUT_SEC
 
-        strategy = make_strategy()
+        host = make_host()
         clock_value = {"t": 1000.0}
-        strategy._clock = lambda: clock_value["t"]
-        strategy.is_pending = True
-        strategy.pending_since = 1000.0
-        strategy.pending_trade = None
+        host._clock = lambda: clock_value["t"]
+        host.is_pending = True
+        host.pending_since = 1000.0
+        host.pending_trade = None
         # not yet timed out
-        strategy._check_pending_timeout()
-        self.assertTrue(strategy.is_pending)
+        host._check_pending_timeout()
+        self.assertTrue(host.is_pending)
         # advance past timeout → no trade object → resets pending
         clock_value["t"] = 1000.0 + PENDING_TIMEOUT_SEC + 1
-        strategy._check_pending_timeout()
-        self.assertFalse(strategy.is_pending)
+        host._check_pending_timeout()
+        self.assertFalse(host.is_pending)
 
     def test_default_clock_is_time_time(self):
         import time
 
-        strategy = make_strategy()
-        self.assertIs(strategy._clock, time.time)
+        host = make_host()
+        self.assertIs(host._clock, time.time)
 
     def test_today_prefers_tick_date(self):
-        strategy = make_strategy()
-        self.assertEqual(strategy._today(), datetime.date.today())
-        strategy._last_tick_exchange_dt = datetime.datetime(2020, 1, 2, 9, 0)
-        self.assertEqual(strategy._today(), datetime.date(2020, 1, 2))
+        host = make_host()
+        self.assertEqual(host._today(), datetime.date.today())
+        host._last_tick_exchange_dt = datetime.datetime(2020, 1, 2, 9, 0)
+        self.assertEqual(host._today(), datetime.date(2020, 1, 2))
 
 
 if __name__ == "__main__":

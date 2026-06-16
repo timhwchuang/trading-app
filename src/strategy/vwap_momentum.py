@@ -50,12 +50,7 @@ class VWAPMomentumStrategy(BaseStrategy):
         self.obs = obs
 
     def reset(self) -> None:
-        self.momentum = MomentumState(
-            active=False,
-            direction="None",
-            peak=0.0,
-            trigger_time=0,
-        )
+        super().reset()
 
     def reset_momentum(self) -> None:
         self.reset()

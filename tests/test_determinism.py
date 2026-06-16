@@ -43,7 +43,7 @@ def _patched_entry_process(original):
             price,
             "entry",
             exchange_ts=ts,
-            audit=self._build_entry_audit(dt, price, ts, "Buy"),
+            audit=self.build_entry_audit(dt, price, ts, "Buy"),
         )
 
     return process
@@ -61,7 +61,7 @@ def _patched_entry_when_atr_ready(original):
             price,
             "entry",
             exchange_ts=ts,
-            audit=self._build_entry_audit(dt, price, ts, "Buy"),
+            audit=self.build_entry_audit(dt, price, ts, "Buy"),
         )
 
     return process

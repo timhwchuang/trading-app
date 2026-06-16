@@ -12,7 +12,7 @@ from exchange_time import (
     is_opening_session_window,
     is_trading_session,
 )
-from test_helpers import make_strategy
+from test_helpers import make_host
 
 
 def _dt(hour: int, minute: int, second: int = 0) -> datetime.datetime:
@@ -56,29 +56,29 @@ class TestOpeningSessionWindow(unittest.TestCase):
 
 class TestCooldownUsesExchangeTs(unittest.TestCase):
     def test_exit_fill_records_exchange_ts_not_system_clock(self):
-        strategy = make_strategy()
+        host = make_host()
         exit_ts = 1_700_000_000
-        strategy.has_position = True
-        strategy.position_dir = "Long"
-        strategy.entry_price = 18000.0
-        strategy.trailing_peak = 18020.0
-        strategy.pending_intent = "exit"
-        strategy.pending_exchange_ts = exit_ts
+        host.has_position = True
+        host.position_dir = "Long"
+        host.entry_price = 18000.0
+        host.trailing_peak = 18020.0
+        host.pending_intent = "exit"
+        host.pending_exchange_ts = exit_ts
 
-        strategy._apply_deal_fill(18011.0, is_buy=False)
+        host._apply_deal_fill(18011.0, is_buy=False)
 
-        self.assertEqual(strategy.last_exit_time, exit_ts)
-        self.assertNotEqual(strategy.last_exit_time, int(__import__("time").time()))
+        self.assertEqual(host.last_exit_time, exit_ts)
+        self.assertNotEqual(host.last_exit_time, int(__import__("time").time()))
 
     def test_cooldown_blocks_until_exchange_ts_elapsed(self):
         from config import COOLDOWN_SEC
 
-        strategy = make_strategy()
+        host = make_host()
         exit_ts = 1_700_000_000
-        strategy.last_exit_time = exit_ts
-        strategy.current_atr = 100.0
+        host.last_exit_time = exit_ts
+        host.current_atr = 100.0
 
-        during = strategy.process_strategy(
+        during = host.process_strategy(
             exit_ts + COOLDOWN_SEC - 1,
             18000.0,
             datetime.datetime.fromtimestamp(
@@ -90,29 +90,29 @@ class TestCooldownUsesExchangeTs(unittest.TestCase):
 
 class TestDailyStateReset(unittest.TestCase):
     def test_reset_on_exchange_date_change(self):
-        strategy = make_strategy()
-        strategy.daily_pnl = -150.0
-        strategy.block_new_entry = True
-        strategy.consecutive_loss = 3
-        strategy._trading_date = datetime.date(2026, 6, 9)
+        host = make_host()
+        host.daily_pnl = -150.0
+        host.block_new_entry = True
+        host.consecutive_loss = 3
+        host._trading_date = datetime.date(2026, 6, 9)
 
-        strategy._maybe_reset_daily_state(_dt(8, 45))
+        host._maybe_reset_daily_state(_dt(8, 45))
 
-        self.assertEqual(strategy.daily_pnl, 0.0)
-        self.assertFalse(strategy.block_new_entry)
-        self.assertEqual(strategy.consecutive_loss, 0)
-        self.assertEqual(strategy._trading_date, datetime.date(2026, 6, 10))
+        self.assertEqual(host.daily_pnl, 0.0)
+        self.assertFalse(host.block_new_entry)
+        self.assertEqual(host.consecutive_loss, 0)
+        self.assertEqual(host._trading_date, datetime.date(2026, 6, 10))
 
     def test_same_day_no_reset(self):
-        strategy = make_strategy()
-        strategy.daily_pnl = -80.0
-        strategy.block_new_entry = True
-        strategy._trading_date = datetime.date(2026, 6, 10)
+        host = make_host()
+        host.daily_pnl = -80.0
+        host.block_new_entry = True
+        host._trading_date = datetime.date(2026, 6, 10)
 
-        strategy._maybe_reset_daily_state(_dt(10, 0))
+        host._maybe_reset_daily_state(_dt(10, 0))
 
-        self.assertEqual(strategy.daily_pnl, -80.0)
-        self.assertTrue(strategy.block_new_entry)
+        self.assertEqual(host.daily_pnl, -80.0)
+        self.assertTrue(host.block_new_entry)
 
 
 if __name__ == "__main__":

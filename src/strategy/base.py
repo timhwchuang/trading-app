@@ -127,7 +127,7 @@ class BaseStrategy(ABC):
         )
 
     def reset_momentum(self) -> None:
-        """Alias kept for VWAP internals; host calls ``reset()``."""
+        """Backward-compatible alias; host calls ``reset()``."""
         self.reset()
 
     def activate_momentum(self, direction: str, price: float, ts: int) -> None:

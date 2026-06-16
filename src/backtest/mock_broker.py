@@ -117,18 +117,18 @@ class MockBroker:
                 slippage = max(slippage, half_spread)
         return slippage
 
-    def _intent_for(self, strategy: Any, order_id: str) -> Optional[str]:
-        if getattr(strategy, "pending_order_id", None) == order_id:
-            return getattr(strategy, "pending_intent", None)
+    def _intent_for(self, host: Any, order_id: str) -> Optional[str]:
+        if getattr(host, "pending_order_id", None) == order_id:
+            return getattr(host, "pending_intent", None)
         return None
 
-    def process_matching_queue(self, tick: Any, strategy: Any) -> None:
+    def process_matching_queue(self, tick: Any, host: Any) -> None:
         tick_ts = tick.datetime.timestamp()
         for ord in list(self.inflight):
             if tick_ts < ord["arrive_after"]:
                 continue
             self.inflight.remove(ord)
-            intent = self._intent_for(strategy, ord["order_id"])
+            intent = self._intent_for(host, ord["order_id"])
             slippage = self._slippage_for(tick, intent, self.NORMAL_SLIP)
             close = float(tick.close)
             limit = ord["limit_price"]
@@ -144,7 +144,7 @@ class MockBroker:
                 else:
                     fill = None
             if fill is None:
-                strategy.handle_order_event(
+                host.handle_order_event(
                     OrderState.FuturesOrder,
                     {
                         "operation": {"op_code": "00", "op_type": "Cancel"},
@@ -153,7 +153,7 @@ class MockBroker:
                     },
                 )
             else:
-                strategy.handle_order_event(
+                host.handle_order_event(
                     OrderState.FuturesDeal,
                     {
                         "price": fill,

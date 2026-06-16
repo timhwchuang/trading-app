@@ -258,7 +258,7 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
     def momentum_peak(self, value: float) -> None:
         self.strategy.momentum.peak = value
 
-    def _build_entry_audit(
+    def build_entry_audit(
         self, dt: datetime.datetime, price: float, ts: int, direction: str
     ) -> SignalAudit:
         vol_threshold = self._vol_threshold(dt)
@@ -268,7 +268,7 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
             market, direction, multiplier, threshold
         )
 
-    def _build_exit_audit(
+    def build_exit_audit(
         self,
         price: float,
         ts: int,
@@ -282,19 +282,6 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
         return self.strategy.build_exit_audit(
             market, direction, reason, trail_points_used=trail_points_used
         )
-
-    def _session_force_flatten_signal(
-        self, price: float, ts: int
-    ) -> OrderSignal:
-        dt = self._last_tick_exchange_dt or datetime.datetime.fromtimestamp(ts)
-        market = self.indicators.snapshot(ts, price, dt)
-        signal, _effects = self.strategy.session_force_flatten_signal(
-            market,
-            self._position_snapshot(),
-            SESSION_FORCE_FLATTEN_TIME,
-        )
-        assert signal is not None
-        return signal
 
     def _position_snapshot(self) -> PositionSnapshot:
         return PositionSnapshot(

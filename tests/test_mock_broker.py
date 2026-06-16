@@ -13,7 +13,7 @@ from config import MOMENTUM_VOL_1S
 from storage.kbar_loader import KBarRecord, save_kbars_csv
 from storage.tick_loader import ReplayTick
 from backtest.mock_broker import MockBroker
-from test_helpers import make_strategy
+from test_helpers import make_host
 
 
 def _make_buy_order(limit: float) -> sj.FuturesOrder:
@@ -247,12 +247,12 @@ class TestMockBrokerMatching(unittest.TestCase):
             }
             broker = MockBroker(clock=lambda: clock_val["t"], cache_dir=cache_dir)
             broker.current_dt = datetime.datetime(2026, 6, 12, 8, 45, 0)
-            strategy = make_strategy()
-            strategy.api = broker
-            strategy.contract = broker.resolve_contract(code)
-            strategy._last_tick_exchange_dt = datetime.datetime(2026, 6, 12, 8, 45, 0)
-            strategy.refresh_atr()
-            self.assertGreater(strategy.current_atr, 0)
+            host = make_host()
+            host.api = broker
+            host.contract = broker.resolve_contract(code)
+            host._last_tick_exchange_dt = datetime.datetime(2026, 6, 12, 8, 45, 0)
+            host.refresh_atr()
+            self.assertGreater(host.current_atr, 0)
 
     def test_spread_calibration_optional(self):
         epoch = datetime.datetime(2026, 6, 12, 9, 0, 0).timestamp()

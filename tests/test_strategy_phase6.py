@@ -107,10 +107,10 @@ class _DummyStrategy(BaseStrategy):
 
 class TestStrategyInterfaceInjection(unittest.TestCase):
     def test_make_strategy_accepts_custom_decision_strategy(self):
-        from test_helpers import make_strategy
+        from test_helpers import make_host
 
         dummy = _DummyStrategy()
-        host = make_strategy(strategy=dummy)
+        host = make_host(decision=dummy)
 
         self.assertIs(host.strategy, dummy)
 
@@ -121,6 +121,19 @@ class TestStrategyInterfaceInjection(unittest.TestCase):
         host = TradingEngine(api=MagicMock(), strategy=dummy)
 
         self.assertIs(host.strategy, dummy)
+
+    def test_host_reset_momentum_delegates_to_strategy_reset(self):
+        from runtime.engine import TradingEngine
+
+        calls: list[str] = []
+
+        class _SpyStrategy(_DummyStrategy):
+            def reset(self) -> None:
+                calls.append("reset")
+
+        host = TradingEngine(api=MagicMock(), strategy=_SpyStrategy())
+        host.reset_momentum()
+        self.assertEqual(calls, ["reset"])
 
     def test_custom_strategy_survives_one_tick(self):
         """Injected BaseStrategy subclass must survive a full on_tick pass."""

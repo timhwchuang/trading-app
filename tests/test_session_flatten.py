@@ -11,7 +11,7 @@ from config import (
     SESSION_FORCE_FLATTEN_TIME,
 )
 from exchange_time import is_at_or_after
-from test_helpers import make_strategy
+from test_helpers import make_host
 
 
 def _dt(hour: int, minute: int, second: int = 0) -> datetime.datetime:
@@ -32,14 +32,16 @@ class TestSessionFlattenTimes(unittest.TestCase):
 
 class TestSessionFlattenStrategy(unittest.TestCase):
     def test_force_flatten_signal(self):
-        strategy = make_strategy()
-        strategy.has_position = True
-        strategy.position_dir = "Long"
-        strategy.entry_price = 18000.0
+        host = make_host()
+        host.has_position = True
+        host.position_dir = "Long"
+        host.entry_price = 18000.0
         ts = int(_dt(13, 44).timestamp())
 
-        signal = strategy._session_force_flatten_signal(17990.0, ts)
+        signal = host.process_strategy(ts, 17990.0, _dt(13, 44))
 
+        self.assertIsNotNone(signal)
+        assert signal is not None
         self.assertEqual(signal.action, "Sell")
         self.assertEqual(signal.intent, "exit")
         self.assertEqual(signal.slippage_points, FLATTEN_SLIPPAGE_POINTS)
@@ -48,23 +50,23 @@ class TestSessionFlattenStrategy(unittest.TestCase):
         self.assertEqual(signal.audit.reason, "session_force_flatten")
 
     def test_no_entry_after_flatten_time(self):
-        strategy = make_strategy()
-        strategy.current_atr = 100.0
+        host = make_host()
+        host.current_atr = 100.0
         ts = int(_dt(13, 40).timestamp())
 
-        signal = strategy.process_strategy(ts, 18000.0, _dt(13, 40))
+        signal = host.process_strategy(ts, 18000.0, _dt(13, 40))
 
         self.assertIsNone(signal)
 
     def test_force_flatten_overrides_manage_exit(self):
-        strategy = make_strategy()
-        strategy.has_position = True
-        strategy.position_dir = "Long"
-        strategy.entry_price = 18000.0
-        strategy.trailing_peak = 18000.0
+        host = make_host()
+        host.has_position = True
+        host.position_dir = "Long"
+        host.entry_price = 18000.0
+        host.trailing_peak = 18000.0
         ts = int(_dt(13, 44).timestamp())
 
-        signal = strategy.process_strategy(ts, 18000.0, _dt(13, 44))
+        signal = host.process_strategy(ts, 18000.0, _dt(13, 44))
 
         self.assertIsNotNone(signal)
         assert signal is not None

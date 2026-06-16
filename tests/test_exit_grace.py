@@ -9,74 +9,74 @@ from config import EXIT_GRACE_SEC, EXIT_GRACE_TICKS, HARD_STOP_POINTS, VWAP_STOP
 
 class TestExitGracePeriod(unittest.TestCase):
     def _long_strategy(self):
-        from test_helpers import make_strategy
+        from test_helpers import make_host
 
-        strategy = make_strategy()
-        strategy.has_position = True
-        strategy.position_dir = "Long"
-        strategy.entry_price = 18000.0
-        strategy.current_vwap = 18000.0
-        strategy.trailing_peak = 18000.0
-        strategy.entry_exchange_ts = 1000
-        strategy.ticks_since_entry = 10
-        return strategy
+        host = make_host()
+        host.has_position = True
+        host.position_dir = "Long"
+        host.entry_price = 18000.0
+        host.current_vwap = 18000.0
+        host.trailing_peak = 18000.0
+        host.entry_exchange_ts = 1000
+        host.ticks_since_entry = 10
+        return host
 
     def test_in_grace_vwap_stop_suppressed(self):
-        strategy = self._long_strategy()
-        vwap_stop_price = strategy.current_vwap - VWAP_STOP_POINTS
-        ts = strategy.entry_exchange_ts + 10
+        host = self._long_strategy()
+        vwap_stop_price = host.current_vwap - VWAP_STOP_POINTS
+        ts = host.entry_exchange_ts + 10
 
-        signal = strategy.manage_exit(vwap_stop_price, ts)
+        signal = host.manage_exit(vwap_stop_price, ts)
 
         self.assertIsNone(signal)
 
     def test_in_grace_hard_stop_still_fires(self):
-        strategy = self._long_strategy()
-        hard_stop_price = strategy.entry_price - HARD_STOP_POINTS
-        ts = strategy.entry_exchange_ts + 10
+        host = self._long_strategy()
+        hard_stop_price = host.entry_price - HARD_STOP_POINTS
+        ts = host.entry_exchange_ts + 10
 
-        signal = strategy.manage_exit(hard_stop_price, ts)
+        signal = host.manage_exit(hard_stop_price, ts)
 
         self.assertIsNotNone(signal)
         assert signal is not None
         self.assertEqual(signal.audit.reason, "stop_loss")
 
     def test_out_of_grace_vwap_stop_active(self):
-        strategy = self._long_strategy()
-        strategy.ticks_since_entry = EXIT_GRACE_TICKS
-        vwap_stop_price = strategy.current_vwap - VWAP_STOP_POINTS
-        ts = strategy.entry_exchange_ts + EXIT_GRACE_SEC
+        host = self._long_strategy()
+        host.ticks_since_entry = EXIT_GRACE_TICKS
+        vwap_stop_price = host.current_vwap - VWAP_STOP_POINTS
+        ts = host.entry_exchange_ts + EXIT_GRACE_SEC
 
-        signal = strategy.manage_exit(vwap_stop_price, ts)
+        signal = host.manage_exit(vwap_stop_price, ts)
 
         self.assertIsNotNone(signal)
         assert signal is not None
         self.assertEqual(signal.audit.reason, "stop_loss_vwap")
 
     def test_still_in_grace_when_ticks_met_but_time_not(self):
-        strategy = self._long_strategy()
-        strategy.ticks_since_entry = EXIT_GRACE_TICKS
-        vwap_stop_price = strategy.current_vwap - VWAP_STOP_POINTS
-        ts = strategy.entry_exchange_ts + EXIT_GRACE_SEC - 1
+        host = self._long_strategy()
+        host.ticks_since_entry = EXIT_GRACE_TICKS
+        vwap_stop_price = host.current_vwap - VWAP_STOP_POINTS
+        ts = host.entry_exchange_ts + EXIT_GRACE_SEC - 1
 
-        signal = strategy.manage_exit(vwap_stop_price, ts)
+        signal = host.manage_exit(vwap_stop_price, ts)
 
         self.assertIsNone(signal)
 
     def test_short_in_grace_vwap_stop_suppressed(self):
-        from test_helpers import make_strategy
+        from test_helpers import make_host
 
-        strategy = make_strategy()
-        strategy.has_position = True
-        strategy.position_dir = "Short"
-        strategy.entry_price = 18000.0
-        strategy.current_vwap = 18000.0
-        strategy.trailing_peak = 18000.0
-        strategy.entry_exchange_ts = 1000
-        strategy.ticks_since_entry = 5
-        vwap_stop_price = strategy.current_vwap + VWAP_STOP_POINTS
+        host = make_host()
+        host.has_position = True
+        host.position_dir = "Short"
+        host.entry_price = 18000.0
+        host.current_vwap = 18000.0
+        host.trailing_peak = 18000.0
+        host.entry_exchange_ts = 1000
+        host.ticks_since_entry = 5
+        vwap_stop_price = host.current_vwap + VWAP_STOP_POINTS
 
-        signal = strategy.manage_exit(vwap_stop_price, 1010)
+        signal = host.manage_exit(vwap_stop_price, 1010)
 
         self.assertIsNone(signal)
 

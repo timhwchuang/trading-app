@@ -1,18 +1,22 @@
 """Pluggable trading strategies.
 
-Strategies implement the ``Strategy`` protocol (see ``base.py``) and are injected
-into ``runtime.TradingEngine`` or ``backtest.BacktestEngine`` via ``strategy=``.
+Decision logic implements ``Strategy`` (see ``base.py``) and is injected into the
+execution host via ``TradingEngine(strategy=...)`` or ``BacktestEngine(strategy=...)``.
 
-Example::
+Example — minimal plugin (inherits defaults for momentum, exit, audit)::
 
-    from strategy.base import BaseStrategy
+    from strategy.base import BaseStrategy, StrategySideEffects
     from runtime.engine import TradingEngine
+    from unittest.mock import MagicMock
 
-    class MyStrategy(BaseStrategy):
-        def evaluate(self, ...):
+    class HoldFlat(BaseStrategy):
+        def evaluate(self, market, position, risk, vol_threshold, **kwargs):
             return None, StrategySideEffects()
 
-    engine = TradingEngine(strategy=MyStrategy())
+    host = TradingEngine(api=MagicMock(), strategy=HoldFlat())
+    # host.strategy is the injected plugin; host itself is the execution engine.
+
+The default plugin is ``VWAPMomentumStrategy`` when ``strategy`` is omitted.
 """
 
 from strategy.base import BaseStrategy, Strategy, StrategySideEffects

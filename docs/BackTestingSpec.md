@@ -5,7 +5,7 @@
 > 簽名、輸入/輸出、邊界情況、以及「驗收條件 + 具體測試案例與預期數值」。
 >
 > 黃金鐵律（違反即視為實作失敗）：
-> 1. **絕對不可修改** `man.py` 的決策邏輯（`process_strategy` / `manage_exit` /
+> 1. **絕對不可修改** `src/strategy/` 與 `src/runtime/` 的決策邏輯（`process_strategy` / `manage_exit` /
 >    `update_vwap` / `update_momentum` / `_handle_futures_deal` / `_handle_futures_order`
 >    / `_apply_deal_fill` / `_stop_loss_hit` / `_in_exit_grace_period`）。
 > 2. 回測只能**注入**外部依賴與**新增**檔案，允許的注入縫：
@@ -116,7 +116,7 @@ class BacktestEngine:
 
 ## Phase 3：啟發式撮合 `MockBroker`
 
-### 3.1 必須實作的 `api` 介面（`man.py` 在回測會用到的最小集合）
+### 3.1 必須實作的 `api` 介面（`TradingEngine` 在回測會用到的最小集合）
 
 | 成員                                      | 簽名 / 回傳                                        | 說明                                    |
 | ----------------------------------------- | -------------------------------------------------- | --------------------------------------- |
@@ -126,7 +126,7 @@ class BacktestEngine:
 | `update_status(trade=...)`                | no-op                                              | 超時補查呼叫；回測直接 pass             |
 | `order_deal_records()`                    | 回傳 `[]`                                          | 同上                                    |
 | `usage()`                                 | 回傳含 `bytes/limit_bytes/remaining_bytes` 的物件 | `refresh_atr` 末端會呼叫；建議 no-op 常數回傳（7.4） |
-| `resolve_contract(code)`                  | 回傳簡單物件含 `.code`                             | 供引擎設定 `strategy.contract`          |
+| `resolve_contract(code)`                  | 回傳簡單物件含 `.code`                             | 供引擎設定 `host.contract`          |
 
 > `_Trade` / `_KBars` 用 `dataclass` 或 `SimpleNamespace` 即可。`order.id` 用遞增整數轉 str。
 
@@ -146,7 +146,7 @@ def place_order(self, contract, order, timeout=0):
     return SimpleNamespace(order=SimpleNamespace(id=order_id))
 ```
 
-> 注意：`man.py` 會在 `place_order` 回傳後，於 lock 內設 `pending_order_id = str(trade.order.id)`。
+> 注意：`TradingEngine` 會在 `place_order` 回傳後，於 lock 內設 `pending_order_id = str(trade.order.id)`。
 > 因此 MockBroker **不需**自行回填 order_id。
 
 ### 3.3 `process_matching_queue(tick, strategy)` 行為
@@ -305,7 +305,7 @@ def sweep(grid: dict[str, list], dates_train, dates_valid, code, cache_dir) -> l
 
 ## Phase 6：初版 Code Review 修訂（P0/P1）— 已實作
 
-> 本章為 Phase 2ㄦ5 初版後的第一輪 review 修訂，**均已落地**。
+> 本章為 Phase 2–5 初版後的第一輪 review 修訂，**均已落地**。
 > **7.x 章節**為第二輪 review（`CodeReview#BackTesting.md`）修訂，優先於 6.3/6.4 的初版敘述。
 > 實作順序：6.1 → 6.3 → 6.4 → 6.6 → 6.2 → 6.8 → 6.5 → 6.7 → **Phase 7**。
 
@@ -369,12 +369,12 @@ else:
 ### 6.4【P0（原 P1，升級）】歷史試撮資料隔離
 
 **問題**：歷史 `Ticks` 無 `simtrade` 旗標（見 BackTesting.md §3）。且 `on_tick`
-（man.py:406）**無條件先 `update_vwap`/`update_momentum`（line 421-422）**，session 檢查
+（`runtime/engine.py` `on_tick`）**無條件先 `update_vwap`/`update_momentum`**，session 檢查
 在更後面才發生 → 08:40-08:45 試撮 tick 會污染 VWAP/動量基準，造成虛假爆量/動量/進場。
 KPI 必然失真，故升為 P0。
 
 **修訂**：在 **feed 層**（`backtester` / `data_loader`）過濾非交易時段 tick，**不可改
-man.py**（違反黃金鐵律）。此舉與線上同構——線上 `simtrade` 亦於訂閱層就濾除、不進
+`src/runtime/engine.py`**（違反黃金鐵律）。此舉與線上同構——線上 `simtrade` 亦於訂閱層就濾除、不進
 `on_tick`。過濾沿用 `exchange_time.is_trading_session(dt, SESSION_START, SESSION_END)`，
 **禁止硬編 08:45**。
 
@@ -404,48 +404,13 @@ N 根 K 線（N ≥ ATR 週期），確保 08:45 第一筆 tick 即可算 ATR。
 
 ### 6.6【P0（致命）】模組 Import 固化 → 動態注入（修訂 5.1）
 
-**問題（實錘，非理論）**：`man.py` 頂層 `from config import (ENTRY_BAND_POINTS,
-VWAP_STOP_POINTS, EXHAUSTION_VOL, EXIT_GRACE_TICKS, ...)`（man.py:31-74），且決策點
-**直接讀 module global**，非 `config.X`、非 `self.X`：
-
-```python
-# man.py:843
-near_vwap = abs(price - self.current_vwap) <= ENTRY_BAND_POINTS
-exhausted = self.vol_1s <= EXHAUSTION_VOL
-# man.py:914 / 917
-vwap_hit = price <= self.current_vwap - VWAP_STOP_POINTS
-```
-
-`import` 當下 `man.ENTRY_BAND_POINTS` 已是獨立綁定。Phase 5 sweep 若 monkeypatch
-`config.ENTRY_BAND_POINTS`，**完全無效**——`man` 早有自己的綁定。**規格 5.1 原寫
-「patch config」是錯的。**
-
-**修訂**：sweep 每組參數時，monkeypatch **`man` 模組命名空間**（line 843 在 call time
-從 `man` 的 global 解析，故建構後再 patch 亦有效）：
-
-```python
-import man, config, observability
-
-def _apply_params(params: dict) -> dict:
-    saved = {}
-    for k, v in params.items():
-        saved[k] = (
-            getattr(man, k, None),
-            getattr(config, k, None),
-            getattr(observability, k, None),
-        )
-        setattr(man, k, v)              # ★ 決策邏輯讀 man.*
-        setattr(config, k, v)
-        setattr(observability, k, v)     # ★ DAILY_SUMMARY.params 讀 observability.*
-    return saved
-```
-
-> `build_config_snapshot()` 讀的是 `observability.ENTRY_BAND_POINTS` 等 import 綁定，
-> **只 patch config 無效**（7.7）。
+**問題（已解）**：早期版本決策邏輯直接讀 `man` 模組 global；現已改為
+`StrategyParams.from_config()`（`src/strategy/params.py`），sweep 透過 patch
+`config` + 還原機制影響新策略實例。
 
 **驗收**：
-* `test_man_namespace_patched`、`test_config_restored`（含 observability 還原）。
-* `test_daily_summary_params_match_sweep`（7.7）。
+* `test_config_restored`、`test_daily_summary_params_match_sweep`
+* `test_sweep_params_affect_entry`
 
 ### 6.7【P1（部分採納）】Bid/Ask 真實度 — 僅作滑價校準，不得當撮合基準
 
@@ -506,15 +471,15 @@ if half_spread is not None:
 
 ## Phase 7：Code Review 落地修訂（`CodeReview#BackTesting.md`）
 
-> Phase 2ㄦ6 初版實作後的 review 反饋，**已落地**。優先於初版 2.2 / 6.3 / 6.4 段落。
+> Phase 2–6 初版實作後的 review 反饋，**已落地**。優先於初版 2.2 / 6.3 / 6.4 段落。
 
 ### 7.1【P0】同步 ATR 注入（修訂背景 thread 問題）
 
-**問題**：`man.py` 的 `_maybe_refresh_atr` 以 daemon thread 跑 `refresh_atr()`。
+**問題**：`TradingEngine` 的 `_maybe_refresh_atr` 以 daemon thread 跑 `refresh_atr()`。
 回測中 `MockBroker.current_dt` 隨主迴圈推進，背景緒讀取時可能 look-ahead 且非確定性。
 若在 `on_tick` 持 lock 時同步呼叫 `refresh_atr()` 會死鎖（`refresh_atr` 內部再搶 lock）。
 
-**修訂（不動 `man.py` 決策邏輯）**：
+**修訂（不動決策邏輯）**：
 1. `BacktestEngine.__init__`：`host._maybe_refresh_atr = _noop_maybe_refresh_atr`
 2. `run()` 內、**`on_tick` 之前且無 lock 時**：`_pre_tick_refresh_atr(strategy, ts)`
    同步呼叫 `refresh_atr()`
@@ -573,7 +538,7 @@ if half_spread is not None:
 * [x] 每個 Phase 的 `tests/test_*.py` 全部通過；`python run_tests.py` 全綠（**93 項**，含既有 69 項）。
 * [x] 回測 log 能直接被 `uat_report.py` 解析，指標語意與實盤一致。
 * [x] 同資料連跑 3 次 SHA-256 一致（含**有 K 線 + 有 FILL** 路徑，7.6）。
-* [x] `man.py` 決策邏輯零改動（`git diff man.py` 為空；僅引擎注入 `_maybe_refresh_atr`）。
+* [x] 決策邏輯在 `src/strategy/`（回測僅注入 `_maybe_refresh_atr` no-op）。
 * [x] 回測路徑無 `time.time()` / `datetime.now()` / `date.today()`；hash 剔除 `perf_counter` 遙測欄位（7.5）。
 * [x] 無 `pandas` / `numpy` 依賴。
 
@@ -590,7 +555,7 @@ if half_spread is not None:
 | 6 | ✅ | 穿價/timeout/試撮/hash/ATR熱身/bid-ask校準/三模組patch |
 | 7 | ✅ | Code Review 落地（見上） |
 
-分支：`feat/backtest-phase5-param-sweep`（線性含 Phase 2ㄦ7 全部 commit）。
+分支：`main`（含 Phase 2–7 回測與 Strategy interface 工作）。
 
 ---
 
@@ -602,4 +567,4 @@ if half_spread is not None:
 4. Phase 4 確定性（含 7.5/7.6）
 5. Phase 5 參數掃描（含 7.7/7.8）
 
-每完成一步跑全測試，確認 `man.py` 無策略邏輯改動。
+每完成一步跑全測試，確認 `src/strategy/` 決策邏輯無非預期改動。
