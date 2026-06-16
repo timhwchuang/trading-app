@@ -160,7 +160,7 @@ strategy-vwap-momentum/     # VWAPMomentumStrategy plugin
   - 負責：on_tick 流程、lock 保護、pending 狀態機、ATR 刷新、session 管理、對帳、落盤、告警。
   - **建構子可注入** `api: BrokerPort`、`clock`（回測用虛擬時鐘）、`strategy: Strategy`（Phase 7）。
   - `host = TradingEngine(api=..., clock=..., strategy=...)`
-  - **Phase 8 引擎抽離 + 三 repo**：核心在 sibling packages（`pip install -e ../trading-engine`、`../trading-backtest`、`../strategy-vwap-momentum`）；`trading-app` 只保留整合層。`BacktestEngine` 委派 `trading_backtest.BacktestEngine` 並注入 `trading_app_engine_ports()`。Strategy 契約在 `trading_engine.core.strategy`（v1）；VWAP 實作在 plugin。詳見 [`docs/Architecture.md`](docs/Architecture.md) 與 [`../docs/three-repo/README.md`](../docs/three-repo/README.md)。
+  - **Phase 8 引擎抽離 + 三 repo**：核心在 sibling packages（`pip install -e ../trading-engine`、`../trading-backtest`、`../strategy-vwap-momentum`）；`trading-app` 只保留整合層。`BacktestEngine` 委派 `trading_backtest.BacktestEngine` 並注入 `trading_app_engine_ports()`。Strategy 契約在 `trading_engine.core.strategy`（v1）；VWAP 實作在 plugin。詳見 [`docs/Architecture.md`](docs/Architecture.md) 與 sibling `SPEC.md`（`trading-engine` / `trading-backtest` / `strategy-vwap-momentum`）。
 
 - **BacktestEngine** (`src/backtest/engine.py`)
   - `self.host = TradingEngine(...)`（把 MockBroker 當 api 傳入）。
