@@ -36,6 +36,7 @@ class Settings:
     momentum_sell_ratio: float
     exhaustion_vol: int
     cooldown_sec: int
+    momentum_timeout_sec: int
     max_daily_loss_points: int
     max_consecutive_loss: int
     fixed_tp_points: int
@@ -134,6 +135,7 @@ def load_config(path: str | Path | None = None) -> Settings:
         momentum_sell_ratio=float(strategy.get("momentum_sell_ratio", 0.78)),
         exhaustion_vol=int(strategy.get("exhaustion_vol", 15)),
         cooldown_sec=int(strategy.get("cooldown_sec", 10)),
+        momentum_timeout_sec=int(strategy.get("momentum_timeout_sec", 180)),
         max_daily_loss_points=int(strategy.get("max_daily_loss_points", 120)),
         max_consecutive_loss=int(strategy.get("max_consecutive_loss", 4)),
         fixed_tp_points=int(strategy.get("fixed_tp_points", 20)),

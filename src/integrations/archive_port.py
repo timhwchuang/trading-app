@@ -1,4 +1,4 @@
-"""ArchivePort adapter wrapping theman storage."""
+"""ArchivePort adapter wrapping trading-app storage."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from storage.kbar_archiver import archive_kbars_snapshot
 from storage.tick_archiver import TickArchiver
 
 
-class ThemanArchivePort:
+class TradingAppArchivePort:
     def __init__(self) -> None:
         self._tick_archiver: Optional[TickArchiver] = None
 
@@ -36,4 +36,6 @@ class ThemanArchivePort:
         )
 
 
-__all__ = ["ThemanArchivePort"]
+ThemanArchivePort = TradingAppArchivePort
+
+__all__ = ["ThemanArchivePort", "TradingAppArchivePort"]

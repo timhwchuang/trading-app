@@ -1,65 +1,59 @@
-# VWAP Momentum 策略（theman）
+# trading-app
 
-> **目標執行環境：Windows**（本專案以 Windows 桌面 / 伺服器為主要部署平台開發與 UAT。）
+> **Reference integrator app** for TXF VWAP momentum on Windows — wires `trading-engine`, `trading-backtest`, and `strategy-vwap-momentum` into a runnable deployment with config, storage, reporting, and UAT tooling.
 
-台指期 VWAP 動量策略，透過 [Shioaji](https://sinotrade.github.io/) 連接永豐金 API。參數見 `config/config.yaml`，密鑰僅走環境變數。
+> **目標執行環境：Windows**（開發、UAT、Pilot 皆以 Windows 為準。）
+
+| 文件 | 用途 |
+|------|------|
+| [SPEC.md](SPEC.md) | App 層邊界、依賴方向、公開 wiring API |
+| [docs/UATReminder.md](docs/UATReminder.md) | UAT 驗收步驟 |
+| [docs/Architecture.md](docs/Architecture.md) | 與三 sibling repo 的架構對照 |
+| [CHANGELOG.md](CHANGELOG.md) | 版本變更 |
+
+**Sibling packages** (pin for v0.1.0):
+
+- [trading-engine](https://github.com/timhwchuang/trading-engine) `@ v0.2.0`
+- [trading-backtest](https://github.com/timhwchuang/trading-backtest) `@ v0.1.0`
+- [strategy-vwap-momentum](https://github.com/timhwchuang/strategy-vwap-momentum) `@ v0.1.0`
 
 ---
 
 ## 系統需求
 
 - **Windows 10 / 11** 或 Windows Server
-- **Python 3.10+**（建議 3.11+）
-- 永豐金 Shioaji API 金鑰（模擬或正式）
-- 系統時區建議設為 **(UTC+08:00) 台北**（策略邏輯以交易所時間為準，但 log 對帳較直覺）
+- **Python 3.11+**
+- 永豐金 [Shioaji](https://sinotrade.github.io/) API 金鑰（模擬或正式）
+- 系統時區建議 **(UTC+08:00) 台北**
 
 ---
 
 ## 安裝
 
-### 1. 安裝 Shioaji（若尚未安裝）
-
-PowerShell（系統管理員可選）：
-
 ```powershell
-pip install shioaji
-```
-
-或使用官方安裝腳本：
-
-```powershell
-irm https://raw.githubusercontent.com/sinotrade/shioaji/main/install.ps1 | iex
-```
-
-### 2. 建立虛擬環境並安裝依賴
-
-```powershell
-cd C:\path\to\theman
+git clone https://github.com/timhwchuang/trading-app.git
+cd trading-app
 python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements.txt
 ```
+
+`requirements.txt` 已 pin 三個 sibling git tag。Monorepo 開發可改 `pip install -e ../trading-engine` 等。
 
 ---
 
 ## 環境變數（PowerShell）
 
 ```powershell
-# 必填：API 金鑰
 $env:SJ_API_KEY = "your_api_key"
 $env:SJ_SEC_KEY = "your_secret_key"
-
-# 正式下單時必填（模擬可略）
-$env:SJ_CA_PATH = "C:\certs\Sinopac.pfx"
+$env:SJ_CA_PATH = "C:\certs\Sinopac.pfx"      # 正式下單
 $env:SJ_CA_PASSWD = "your_ca_password"
-
-# 可選：覆寫設定檔與日誌
-$env:CONFIG_PATH = "C:\theman\config\config.yaml"
-$env:LOG_FILE = "C:\logs\theman.log"
+$env:CONFIG_PATH = "C:\trading-app\config\config.yaml"
+$env:LOG_FILE = "C:\logs\trading-app-uat.log"
 $env:LOG_LEVEL = "INFO"
+$env:TICK_ARCHIVE = "1"                         # UAT 建議開啟
 ```
-
-若要開機後自動帶入，可寫入「系統內容 → 進階 → 環境變數」，或使用 `.ps1` 啟動腳本。
 
 ---
 
@@ -71,79 +65,31 @@ cd src
 python -m live
 ```
 
-（從專案根目錄亦可：`$env:PYTHONPATH = "src"; python -m live`。）
-
-### 子系統 CLI（`cd src` 或 `PYTHONPATH=src`）
-
 | 用途 | 指令 |
-| ---- | ---- |
-| Live 交易 | `python -m live` |
-| 回測 | `python -m backtest --code TXFR1 --dates 2026-01-02` |
-| UAT 報告 | `python -m reporting log1.log log2.log` |
-| 壓縮 tick 快取 | `python -m storage.compress` |
+|------|------|
+| Live / 模擬 | `python -m live` |
+| 回測 | `python -m backtest --code TXFR1 --dates 2026-06-12` |
+| UAT 報告 | `python -m reporting C:\logs\trading-app-uat.log` |
+| 壓縮 tick | `python -m storage.compress` |
 
-### 已移除的舊入口（改用模組路徑）
-
-| 舊指令 | 新指令 |
-| ------ | ------ |
-| `python src\man.py` | `cd src; python -m live` |
-| `python src\backtester.py` | `python -m backtest` |
-| `python src\uat_report.py` | `python -m reporting` |
-| `python src\compress_tick_cache.py` | `python -m storage.compress` |
-
-首次請確認 `config/config.yaml` 中 `simulation: true`，通過 UAT 後再改為 `false`。
+首次請確認 `config/config.yaml` 中 **`simulation: true`**。UAT 通過後再評估 Pilot。
 
 ---
-
-## 設定檔
-
-| 檔案                    | 說明                                             |
-| ----------------------- | ------------------------------------------------ |
-| `config/config.yaml`    | 策略參數、交易時段、開盤量能階梯（**不含密鑰**） |
-| `src/config.py`         | YAML 載入器                                    |
-| `src/runtime/`          | 狀態機、下單、session（`TradingEngine`）       |
-| `src/strategy/`         | 策略邏輯（`Strategy` interface；目前預設 VWAP Momentum） |
-| `src/storage/`          | tick/kbar 快取與 live 落盤                       |
-| `src/backtest/`         | 回測引擎與 mock broker                         |
-| `src/reporting/`        | UAT 報告與績效指標                             |
-
-修改參數後**重啟程式**即可，無需改策略程式碼。
-
----
-
-## Windows 運維備忘
-
-| 項目         | 建議做法                                                                    |
-| ------------ | --------------------------------------------------------------------------- |
-| 開機自動啟動 | 工作排程器（Task Scheduler）或 [NSSM](https://nssm.cc/) 註冊為 Windows 服務 |
-| 時間同步     | 設定 → 時間與語言 → **自動設定時間**；或 `w32tm /query /status` 確認 NTP    |
-| 睡眠 / 更新  | 交易時段禁用睡眠；延後 Windows Update 自動重開機                            |
-| 日誌目錄     | 預先建立 `C:\logs\`，並確認執行帳號有寫入權限                               |
-| 防火牆       | 允許 Python / Shioaji 對外連線至券商 API                                    |
-
-詳細上線清單見 [`TODO.md`](TODO.md) Phase 4。
-
----
-
-## 專案文件
-
-| 檔案                                           | 內容                                       |
-| ---------------------------------------------- | ------------------------------------------ |
-| [`AGENTS.md`](AGENTS.md)                       | **AI 協作守則**（Cursor + Grok 強制合規）  |
-| [`.cursor/rules/`](.cursor/rules/)             | Cursor 專案規則（`alwaysApply`）           |
-| [`TODO.md`](TODO.md)                           | 開發路線圖、實戰踩坑、UAT / Pilot 檢查清單 |
-| [`docs/UATReminder.md`](docs/UATReminder.md)   | Phase 0 驗收步驟與 log 證據                |
 
 ## 專案結構
 
 ```
-.
-├── config/          # 設定檔（config.yaml）
-├── docs/            # 設計、UAT、Code Review 文件
-├── src/             # 核心源碼（策略、回測、工具）
-├── tests/           # 單元測試（已鏡射 src/ 結構：backtest/、runtime/、storage/、strategy/、sweep/、reporting/；詳見 run_tests.py 內 maintenance note）
-├── README.md
-├── TODO.md
+trading-app/
+├── config/config.yaml       # 策略參數（非密鑰）
+├── src/
+│   ├── integrations/        # trading_app_engine_ports() 接線
+│   ├── live/                # CLI 入口
+│   ├── backtest/engine.py   # 薄 wrapper（注入 ports）
+│   ├── storage/             # tick/kbar 落盤
+│   ├── reporting/           # uat_report、績效指標
+│   └── sweep/               # 參數研究
+├── tests/                   # integration tests (~69)
+├── pyproject.toml
 └── requirements.txt
 ```
 
@@ -151,13 +97,6 @@ python -m live
 
 ---
 
-## 常見問題
+## Disclaimer
 
-**Q：可以在 Linux / macOS 上跑嗎？**
-A：程式為跨平台 Python，但本專案文件與運維流程以 **Windows 為準**。若改在 Linux 部署，請自行對照 TODO 中 chrony / systemd 等 Linux 備註。
-
-**Q：`LOG_FILE` 路徑怎麼寫？**
-A：Windows 可用 `C:\logs\theman.log` 或 `C:/logs/theman.log`。
-
-**Q：正式下單要注意什麼？**
-A：`simulation: false`、設定 CA 憑證、Pilot 階段固定 1 口，先觀察 08:45-09:15 滑價與 Cancelled 率。
+本 repo 為個人研究與學習用途。**UAT-ready ≠ Live-ready**。實盤風險自負。上線前請閱讀 [trading-engine LIVE_SAFETY](https://github.com/timhwchuang/trading-engine/blob/main/docs/LIVE_SAFETY.md) 與 [UAT_CHECKLIST](https://github.com/timhwchuang/trading-engine/blob/main/docs/UAT_CHECKLIST.md)。

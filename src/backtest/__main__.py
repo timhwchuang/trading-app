@@ -1,4 +1,4 @@
-"""CLI: run tick replay backtest."""
+"""CLI: run tick replay backtest (delegates to trading-backtest)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,10 @@ import argparse
 import datetime
 import logging
 
-from backtest.engine import BacktestEngine
-from storage.tick_loader import DEFAULT_CACHE_DIR
+from trading_backtest.loader import DEFAULT_CACHE_DIR
+
+# App-wired BacktestEngine (trading-app ports + default strategy)
+from .engine import BacktestEngine
 
 
 def main(argv: list[str] | None = None) -> int:

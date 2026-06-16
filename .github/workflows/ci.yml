@@ -1,6 +1,5 @@
-# CI for theman (P6-CAL + AGENTS.md requirement)
-# PR / push 必須跑 python run_tests.py 全綠。
-name: theman-tests
+# CI for trading-app — PR / push must pass python run_tests.py.
+name: trading-app-tests
 
 on:
   push:
@@ -20,4 +19,3 @@ jobs:
       - run: bash scripts/ci-setup.sh
       - run: python run_tests.py
         working-directory: .
-      # 未來可加：UAT 模擬 key（若有）、determinism 重複跑、coverage gate。

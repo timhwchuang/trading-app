@@ -1,4 +1,4 @@
-"""Theman app-level backtest assembly (wires strategy + ports; replay loop in trading-backtest)."""
+"""Trading-app backtest assembly (wires strategy + ports; replay loop in trading-backtest)."""
 
 from __future__ import annotations
 
@@ -6,16 +6,16 @@ import datetime
 from typing import List
 
 from core.runtime_config import RuntimeConfig, default_runtime_config
-from integrations.engine_wiring import default_strategy, theman_engine_ports
-from strategy.base import Strategy
+from integrations.engine_wiring import default_strategy, trading_app_engine_ports
 from trading_backtest import BacktestEngine as CoreBacktestEngine
 from trading_backtest import VirtualClock
 from trading_backtest.loader import DEFAULT_CACHE_DIR
 from trading_backtest.mock_broker import MockBroker
+from trading_engine.core.strategy import Strategy
 
 
 class BacktestEngine:
-    """Thin wrapper: inject theman ports + default strategy; delegate replay to trading-backtest."""
+    """Thin wrapper: inject app ports + default strategy; delegate replay to trading-backtest."""
 
     def __init__(
         self,
@@ -33,7 +33,7 @@ class BacktestEngine:
             BLOWOUT_VOL=cfg.momentum_vol_1s,
             session_force_flatten_time=cfg.session_force_flatten_time,
         )
-        ports = theman_engine_ports(
+        ports = trading_app_engine_ports(
             api=self.broker,
             use_mock_adapter=True,
             runtime_config=cfg,

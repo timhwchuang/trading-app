@@ -1,4 +1,4 @@
-"""TelemetryPort adapter wrapping theman observability."""
+"""TelemetryPort adapter wrapping trading-app observability."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from observability import (
 )
 
 
-class ThemanTelemetryPort:
+class TradingAppTelemetryPort:
     def __init__(
         self,
         obs: DailyObservability | None = None,
@@ -78,4 +78,6 @@ class ThemanTelemetryPort:
         )
 
 
-__all__ = ["ThemanTelemetryPort"]
+ThemanTelemetryPort = TradingAppTelemetryPort
+
+__all__ = ["ThemanTelemetryPort", "TradingAppTelemetryPort"]

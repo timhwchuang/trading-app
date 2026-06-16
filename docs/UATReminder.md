@@ -10,11 +10,11 @@
 ## 啟動前檢查（模擬 UAT）
 
 ```powershell
-cd C:\path\to\theman
+cd C:\path\to\trading-app
 .\.venv\Scripts\activate
 $env:SJ_API_KEY = "your_api_key"
 $env:SJ_SEC_KEY = "your_secret_key"
-$env:LOG_FILE = "C:\logs\theman-uat.log"   # 建議開啟（P4-2 每日輪替）
+$env:LOG_FILE = "C:\logs\trading-app-uat.log"   # 建議開啟（P4-2 每日輪替）
 # UAT 第一天：tick 落盤（P0-11，hard gate）+ 委託回報欄位
 $env:TICK_ARCHIVE = "1"
 # 選配：kbars 落盤（ATR / 趨勢濾網回測熱身，P0-11 follow-up）
@@ -43,7 +43,7 @@ python -m live
 ### 收盤後 tick 壓縮（工作排程器建議 15:30 / 16:00）
 
 ```powershell
-cd C:\path\to\theman
+cd C:\path\to\trading-app
 .\.venv\Scripts\activate
 cd src
 python -m storage.compress

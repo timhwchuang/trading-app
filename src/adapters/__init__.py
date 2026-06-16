@@ -1,1 +1,0 @@
-"""Broker adapters: order construction decoupled from TradingEngine."""

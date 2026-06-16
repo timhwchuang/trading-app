@@ -12,7 +12,6 @@ from unittest.mock import patch
 
 from config import MIN_ATR_THRESHOLD
 from storage.kbar_loader import KBarRecord, kbars_cache_path, save_kbars_csv
-from storage.tick_loader import ReplayTick
 from sweep.determinism_check import (
     canonical_audit_json,
     capture_backtest_log_lines,
@@ -20,17 +19,10 @@ from sweep.determinism_check import (
     hash_audit_records,
     run_hash,
 )
-from core.types import OrderSignal
-from runtime.engine import TradingEngine
+from trading_engine.core.types import OrderSignal
+from trading_engine.engine import TradingEngine
 from reporting.uat_report import compute_metrics
-
-
-def _session_ticks() -> list[ReplayTick]:
-    base = datetime.datetime(2026, 6, 12, 9, 0, 0)
-    return [
-        ReplayTick(base, "18000", 1, 1),
-        ReplayTick(base.replace(second=1), "18000", 1, 1),
-    ]
+from tests.sweep._tick_helpers import session_ticks as _session_ticks
 
 
 def _patched_entry_process(original):
@@ -138,7 +130,7 @@ class TestDeterminism(unittest.TestCase):
 
         def emit_with_bonus(self, trade_date):
             original_emit(self, trade_date)
-            logging.getLogger("theman").info(
+            logging.getLogger("trading_engine").info(
                 "DAILY_SUMMARY %s",
                 json.dumps({"date": str(trade_date), "bonus": 1}),
             )
@@ -189,11 +181,7 @@ class TestDeterminism(unittest.TestCase):
         self.assertEqual(h_base, h_mutated)
 
     def test_three_runs_same_hash_with_kbars_and_fills(self):
-        base = datetime.datetime(2026, 6, 12, 9, 0, 0)
-        ticks = [
-            ReplayTick(base, "18000", 1, 1),
-            ReplayTick(base.replace(second=1), "18000", 1, 1),
-        ]
+        ticks = _session_ticks()
         date = datetime.date(2026, 6, 12)
 
         def fake_replay(_code, _dates, cache_dir=None):
@@ -226,11 +214,7 @@ class TestDeterminism(unittest.TestCase):
 
     def test_performance_in_daily_summary_hash_stable(self):
         """P6-6 / TODO 7.6: performance block in DAILY_SUMMARY must be hash-stable."""
-        base = datetime.datetime(2026, 6, 12, 9, 0, 0)
-        ticks = [
-            ReplayTick(base, "18000", 1, 1),
-            ReplayTick(base.replace(second=1), "18000", 1, 1),
-        ]
+        ticks = _session_ticks()
         date = datetime.date(2026, 6, 12)
 
         def fake_replay(_code, _dates, cache_dir=None):

@@ -10,7 +10,7 @@ from strategy_vwap_momentum.trend import compute_trend
 from trading_engine.calendar.port import TaifexMarketCalendar
 
 
-class ThemanTrendRefresh:
+class TradingAppTrendRefresh:
     def __init__(self) -> None:
         self._calendar = TaifexMarketCalendar()
 
@@ -47,4 +47,6 @@ class ThemanTrendRefresh:
         )
 
 
-__all__ = ["ThemanTrendRefresh"]
+ThemanTrendRefresh = TradingAppTrendRefresh
+
+__all__ = ["ThemanTrendRefresh", "TradingAppTrendRefresh"]

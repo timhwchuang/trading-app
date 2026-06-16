@@ -5,13 +5,13 @@ from __future__ import annotations
 import shioaji as sj
 
 from config import SIMULATION
-from integrations.engine_wiring import default_strategy, theman_engine_ports
-from runtime.engine import TradingEngine
+from integrations.engine_wiring import default_strategy, trading_app_engine_ports
+from trading_engine.engine import TradingEngine
 
 
 def main() -> None:
     api = sj.Shioaji(simulation=SIMULATION)
-    ports = theman_engine_ports(
+    ports = trading_app_engine_ports(
         api=api,
         use_mock_adapter=False,
         with_alerts=True,

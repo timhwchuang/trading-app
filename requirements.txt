@@ -1,5 +1,6 @@
--e ../trading-engine
--e ../strategy-vwap-momentum
--e ../trading-backtest
+# Sibling packages — git tags for standalone clone; monorepo dev may use -e ../ paths.
+trading-engine @ git+https://github.com/timhwchuang/trading-engine.git@v0.2.0
+trading-backtest @ git+https://github.com/timhwchuang/trading-backtest.git@v0.1.0
+strategy-vwap-momentum @ git+https://github.com/timhwchuang/strategy-vwap-momentum.git@v0.1.0
 shioaji
 PyYAML>=6.0

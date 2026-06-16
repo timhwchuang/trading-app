@@ -5,9 +5,9 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import MagicMock
 
-from integrations.engine_wiring import default_strategy, theman_engine_ports
-from runtime.engine import TradingEngine
-from strategy.base import Strategy
+from integrations.engine_wiring import default_strategy, trading_app_engine_ports
+from trading_engine.core.strategy import Strategy
+from trading_engine.engine import TradingEngine
 
 
 def make_host(
@@ -17,11 +17,11 @@ def make_host(
 ) -> TradingEngine:
     """Create a TradingEngine (execution host) with mock API.
 
-    Pass ``decision`` to inject a custom strategy plugin (see strategy.base.Strategy).
+    Pass ``decision`` to inject a custom strategy plugin.
     Pass ``api`` to bind a concrete broker (e.g. MockBroker) at construction time.
     """
     broker = api if api is not None else MagicMock()
-    ports = theman_engine_ports(api=broker, use_mock_adapter=True)
+    ports = trading_app_engine_ports(api=broker, use_mock_adapter=True)
     if decision is None:
         decision = default_strategy(ports["runtime_config"], ports["obs"])
     return TradingEngine(
@@ -31,7 +31,6 @@ def make_host(
     )
 
 
-# Backward-compatible alias; prefer make_host (returns host, not decision logic).
 make_strategy = make_host
 
 

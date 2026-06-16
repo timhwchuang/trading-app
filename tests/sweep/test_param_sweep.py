@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import config
 from core.runtime_config import default_runtime_config
-from storage.tick_loader import ReplayTick
+from tests.sweep._tick_helpers import make_replay_tick
 from observability import build_config_snapshot
 from sweep.param_sweep import (
     _apply_params,
@@ -18,17 +18,14 @@ from sweep.param_sweep import (
     _run_backtest_summaries,
     sweep,
 )
-from integrations.engine_wiring import theman_engine_ports
-from runtime.engine import TradingEngine
-from strategy.params import StrategyParams
-from strategy.vwap_momentum import VWAPMomentumStrategy
+from integrations.engine_wiring import trading_app_engine_ports
+from strategy_vwap_momentum import StrategyParams, VWAPMomentumStrategy
+from trading_engine.engine import TradingEngine
 
 
 class TestParamSweep(unittest.TestCase):
     def test_sweep_small_grid(self):
-        ticks = [
-            ReplayTick(datetime.datetime(2026, 6, 12, 9, 0, 0), "18000", 1, 1),
-        ]
+        ticks = [make_replay_tick(datetime.datetime(2026, 6, 12, 9, 0, 0))]
 
         def fake_replay(_code, _dates, cache_dir=None):
             yield from ticks
@@ -57,9 +54,7 @@ class TestParamSweep(unittest.TestCase):
 
     def test_sweep_with_trend_params_attaches_veto_metrics(self):
         """P6-1-CAL-3: param_sweep now accepts trend_ keys and attaches veto_metrics via harness."""
-        ticks = [
-            ReplayTick(datetime.datetime(2026, 6, 12, 9, 0, 0), "18000", 1, 1),
-        ]
+        ticks = [make_replay_tick(datetime.datetime(2026, 6, 12, 9, 0, 0))]
 
         def fake_replay(_code, _dates, cache_dir=None):
             yield from ticks
@@ -95,9 +90,7 @@ class TestParamSweep(unittest.TestCase):
         )
 
     def test_daily_summary_params_match_sweep(self):
-        ticks = [
-            ReplayTick(datetime.datetime(2026, 6, 12, 9, 0, 0), "18000", 1, 1),
-        ]
+        ticks = [make_replay_tick(datetime.datetime(2026, 6, 12, 9, 0, 0))]
 
         def fake_replay(_code, _dates, cache_dir=None):
             yield from ticks
@@ -130,7 +123,7 @@ class TestParamSweep(unittest.TestCase):
         saved = _apply_params({"ENTRY_BAND_POINTS": 7.5}, cfg)
         try:
             api = MagicMock()
-            ports = theman_engine_ports(
+            ports = trading_app_engine_ports(
                 api=api, use_mock_adapter=True, runtime_config=cfg
             )
             host = TradingEngine(
@@ -149,7 +142,7 @@ class TestParamSweep(unittest.TestCase):
             strat.momentum.direction = "Long"
             strat.momentum.trigger_time = 900
             host.current_atr = 30.0
-            host.has_position = False
+            host.position_qty = 0
             host.is_pending = False
             host.consecutive_loss = 0
             host.last_exit_time = 0

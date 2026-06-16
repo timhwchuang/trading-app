@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trading-app"
+version = "0.1.0"
+description = "Reference integrator app: wires trading-engine, trading-backtest, and strategy plugins for Windows live UAT"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+  {name = "trading-app maintainers"}
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Office/Business :: Financial :: Investment",
+]
+dependencies = [
+  "trading-engine>=0.2.0,<1.0",
+  "trading-backtest>=0.1.0,<1.0",
+  "strategy-vwap-momentum>=0.1.0,<1.0",
+  "shioaji",
+  "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["ruff>=0.8", "mypy>=1.11"]
+
+[project.urls]
+Homepage = "https://github.com/timhwchuang/trading-app"
+Documentation = "https://github.com/timhwchuang/trading-app/blob/main/SPEC.md"
+Repository = "https://github.com/timhwchuang/trading-app"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501", "UP042"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true

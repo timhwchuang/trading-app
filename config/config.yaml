@@ -10,9 +10,9 @@
 #   $env:SJ_CA_PASSWD = "your_ca_password"
 #
 # 可選覆寫：
-#   $env:CONFIG_PATH = "C:\theman\config\config.yaml"
+#   $env:CONFIG_PATH = "C:\trading-app\config\config.yaml"
 #   $env:LOG_LEVEL = "DEBUG"
-#   $env:LOG_FILE = "C:\logs\theman.log"
+#   $env:LOG_FILE = "C:\logs\trading-app-uat.log"
 
 # 是否使用 Shioaji 模擬環境（上線前務必改為 false）
 simulation: true
@@ -41,6 +41,9 @@ strategy:
 
   # 平倉後冷卻時間（秒）；防止剛出場又立刻進場
   cooldown_sec: 10
+
+  # Momentum 狀態最長存活時間（秒）；超過後自動 reset，不再等待 pullback
+  momentum_timeout_sec: 180
 
   # 單日最大虧損點數；觸發後禁止新進場（持倉仍可平倉）
   max_daily_loss_points: 120

@@ -1,0 +1,32 @@
+# Changelog
+
+All notable changes to `trading-app` are documented here.  
+Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).  
+Versioning follows [SemVer](https://semver.org/) (0.x = API may still evolve).
+
+## [0.1.0] - 2026-06-16
+
+First public release as **reference integrator app** (renamed from internal `theman`).
+
+### Added
+
+- `pyproject.toml`, `SPEC.md`, `LICENSE`, `.env.example`, `docs/RELEASE_CHECKLIST.md`
+- `trading_app_engine_ports()` wiring for live, backtest, and tests
+- `TradingAppTelemetryPort`, `TradingAppAlertPort`, `TradingAppArchivePort`, `TradingAppTrendRefresh`
+- `reporting/` UAT log parser (`python -m reporting`)
+- `storage/` tick/kbar archive + `sweep/` param research tooling
+- CI: standalone clone via git-tagged sibling packages
+
+### Changed
+
+- Renamed from `theman` → `trading-app` (repo / docs / symbols)
+- Dependencies: `trading-engine`, `trading-backtest`, `strategy-vwap-momentum` (no vendored kernel)
+- Removed transitional re-export shims (`runtime/`, `strategy/`, `adapters/`, most of `core/`)
+- App tests scoped to integration / storage / reporting / sweep (~30 tests)
+
+### Notes
+
+- **UAT-ready**, not Live-ready — see `docs/UATReminder.md`
+- Pin siblings: `trading-engine@v0.2.0`, `trading-backtest@v0.1.0`, `strategy-vwap-momentum@v0.1.0`
+
+[0.1.0]: https://github.com/timhwchuang/trading-app/releases/tag/v0.1.0

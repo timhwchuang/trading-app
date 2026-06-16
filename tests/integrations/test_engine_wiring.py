@@ -1,4 +1,4 @@
-"""Tests for integrations.engine_wiring (Phase 8 merge fix)."""
+"""Tests for integrations.engine_wiring."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest import mock
 from unittest.mock import MagicMock
 
-from integrations.engine_wiring import default_strategy, theman_engine_ports
+from integrations.engine_wiring import default_strategy, trading_app_engine_ports
 from trading_engine.logging_setup import shutdown_async_logging
 
 
@@ -19,7 +19,7 @@ class TestEngineWiring(unittest.TestCase):
 
     def test_shared_obs_between_telemetry_and_strategy(self):
         api = MagicMock()
-        ports = theman_engine_ports(api=api, use_mock_adapter=True)
+        ports = trading_app_engine_ports(api=api, use_mock_adapter=True)
         strategy = default_strategy(ports["runtime_config"], ports["obs"])
 
         self.assertIs(strategy.obs, ports["obs"])
@@ -34,8 +34,8 @@ class TestEngineWiring(unittest.TestCase):
             with mock.patch.object(wiring, "LOG_FILE", str(log_path)):
                 with mock.patch.object(wiring, "LOG_LEVEL", "INFO"):
                     api = MagicMock()
-                    wiring.theman_engine_ports(api=api, use_mock_adapter=True)
-                    logging.getLogger("theman").info("SIGNAL_AUDIT smoke")
+                    wiring.trading_app_engine_ports(api=api, use_mock_adapter=True)
+                    logging.getLogger("trading_engine").info("SIGNAL_AUDIT smoke")
                     shutdown_async_logging()
                     self.assertTrue(log_path.exists())
                     self.assertIn("SIGNAL_AUDIT", log_path.read_text(encoding="utf-8"))

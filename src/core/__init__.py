@@ -1,1 +1,1 @@
-"""Shared core types and audit contracts."""
+"""Trading-app core bridge (RuntimeConfig from YAML + env)."""

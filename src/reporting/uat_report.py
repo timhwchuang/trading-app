@@ -14,7 +14,7 @@ from reporting.performance_metrics import (
     aggregate_daily_performance,
     compute_performance_from_fills,
 )
-from core.audit.signal_audit import SignalAudit
+from trading_engine.core.audit.signal_audit import SignalAudit
 
 MOMENTUM_TRIGGER_RE = re.compile(r"MOMENTUM (Long|Short) 突破")
 SIGNAL_AUDIT_RE = re.compile(r"SIGNAL_AUDIT (.+)$")
@@ -674,7 +674,7 @@ def read_log_lines(paths: list[Path]) -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Analyze theman log for UAT metrics."
+        description="Analyze trading-app log for UAT metrics."
     )
     parser.add_argument(
         "log_files",

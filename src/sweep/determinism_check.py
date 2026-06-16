@@ -19,8 +19,11 @@ _NON_DETERMINISTIC_OPERATIONAL_KEYS = frozenset(
         "no_tick_resubscribe",
         "atr_min",
         "atr_max",
+        "atr_samples",
+        "tick_type",
     }
 )
+_AUDIT_LOGGERS = ("trading_engine", "strategy_vwap_momentum")
 
 
 def normalize_audit_for_hash(label: str, json_part: str) -> str:
@@ -77,24 +80,36 @@ def hash_audit_lines(json_parts: Iterable[str]) -> str:
     return hasher.hexdigest()
 
 
+def _run_with_audit_capture(fn) -> list[tuple[str, str]]:
+    handler = _AuditCaptureHandler()
+    loggers: list[tuple[logging.Logger, int]] = []
+    for name in _AUDIT_LOGGERS:
+        logger = logging.getLogger(name)
+        loggers.append((logger, logger.level))
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+    try:
+        fn()
+    finally:
+        for logger, prev_level in loggers:
+            logger.removeHandler(handler)
+            logger.setLevel(prev_level)
+    return handler.records
+
+
 def run_hash(
     code: str,
     dates: list,
     cache_dir=DEFAULT_CACHE_DIR,
 ) -> str:
     """Run one backtest and hash SIGNAL_AUDIT + FILL_AUDIT + DAILY_SUMMARY JSON."""
-    handler = _AuditCaptureHandler()
-    strategy_logger = logging.getLogger("theman")
-    prev_level = strategy_logger.level
-    strategy_logger.addHandler(handler)
-    strategy_logger.setLevel(logging.INFO)
-    try:
+
+    def _run() -> None:
         engine = BacktestEngine(code, dates, cache_dir=Path(cache_dir))
         engine.run()
-    finally:
-        strategy_logger.removeHandler(handler)
-        strategy_logger.setLevel(prev_level)
-    return hash_audit_records(handler.records)
+
+    records = _run_with_audit_capture(_run)
+    return hash_audit_records(records)
 
 
 def capture_backtest_log_lines(
@@ -103,15 +118,10 @@ def capture_backtest_log_lines(
     cache_dir=DEFAULT_CACHE_DIR,
 ) -> list[str]:
     """Return uat_report-compatible log lines from a backtest run."""
-    handler = _AuditCaptureHandler()
-    strategy_logger = logging.getLogger("theman")
-    prev_level = strategy_logger.level
-    strategy_logger.addHandler(handler)
-    strategy_logger.setLevel(logging.INFO)
-    try:
+
+    def _run() -> None:
         engine = BacktestEngine(code, dates, cache_dir=Path(cache_dir))
         engine.run()
-    finally:
-        strategy_logger.removeHandler(handler)
-        strategy_logger.setLevel(prev_level)
-    return [f"10:00:00 [INFO] {label} {payload}" for label, payload in handler.records]
+
+    records = _run_with_audit_capture(_run)
+    return [f"10:00:00 [INFO] {label} {payload}" for label, payload in records]

@@ -1,4 +1,4 @@
-"""Default TradingEngine port wiring for theman apps (live / backtest / tests)."""
+"""Default TradingEngine port wiring for trading-app (live / backtest / tests)."""
 
 from __future__ import annotations
 
@@ -6,10 +6,10 @@ from typing import Any
 
 from config import LOG_FILE, LOG_LEVEL
 from core.runtime_config import RuntimeConfig, default_runtime_config
-from integrations.alerts_port import ThemanAlertPort
-from integrations.archive_port import ThemanArchivePort
-from integrations.telemetry_port import ThemanTelemetryPort
-from integrations.trend_refresh import ThemanTrendRefresh
+from integrations.alerts_port import TradingAppAlertPort
+from integrations.archive_port import TradingAppArchivePort
+from integrations.telemetry_port import TradingAppTelemetryPort
+from integrations.trend_refresh import TradingAppTrendRefresh
 from observability import DailyObservability
 from strategy_vwap_momentum import StrategyParams, VWAPMomentumStrategy
 from trading_engine.adapters.mock import MockOrderAdapter
@@ -59,7 +59,7 @@ def load_named_strategy(
     )
 
 
-def theman_engine_ports(
+def trading_app_engine_ports(
     *,
     api: Any,
     use_mock_adapter: bool,
@@ -67,27 +67,31 @@ def theman_engine_ports(
     with_alerts: bool = False,
     with_archive: bool = False,
 ) -> dict:
-    """Return kwargs for ``TradingEngine(api=api, **theman_engine_ports(api=...))``."""
+    """Return kwargs for ``TradingEngine(api=api, **trading_app_engine_ports(api=...))``."""
     _ensure_logging()
     cfg = runtime_config or default_runtime_config()
     obs = DailyObservability()
     ports: dict = {
         "runtime_config": cfg,
         "order_adapter": order_adapter_for(api, use_mock=use_mock_adapter),
-        "telemetry": ThemanTelemetryPort(obs=obs, runtime_config=cfg),
-        "trend_refresh": ThemanTrendRefresh(),
+        "telemetry": TradingAppTelemetryPort(obs=obs, runtime_config=cfg),
+        "trend_refresh": TradingAppTrendRefresh(),
         "obs": obs,
     }
     if with_alerts:
-        ports["alerts"] = ThemanAlertPort()
+        ports["alerts"] = TradingAppAlertPort()
     if with_archive:
-        ports["archive"] = ThemanArchivePort()
+        ports["archive"] = TradingAppArchivePort()
     return ports
 
+
+# Deprecated alias — remove after one release cycle.
+theman_engine_ports = trading_app_engine_ports
 
 __all__ = [
     "default_strategy",
     "load_named_strategy",
     "order_adapter_for",
     "theman_engine_ports",
+    "trading_app_engine_ports",
 ]

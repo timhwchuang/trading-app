@@ -4,21 +4,17 @@ from __future__ import annotations
 
 import itertools
 import json
-import logging
 from pathlib import Path
 from typing import Any
 
 from backtest.engine import BacktestEngine
 from config import SWEEP_DD_PENALTY, SWEEP_SCORE_METRIC, SWEEP_SL_PENALTY
-from storage.tick_loader import DEFAULT_CACHE_DIR
-from sweep.determinism_check import _AuditCaptureHandler
+from core.runtime_config import default_runtime_config
 from reporting.performance_metrics import aggregate_daily_performance, sweep_score_from_kpi
 from reporting.trend_calibration import compute_trend_veto_calibration
-from core.runtime_config import default_runtime_config
-from strategy.params import (
-    apply_strategy_params,
-    restore_strategy_params,
-)
+from storage.tick_loader import DEFAULT_CACHE_DIR
+from strategy_vwap_momentum import apply_strategy_params, restore_strategy_params
+from sweep.determinism_check import _run_with_audit_capture
 
 DEFAULT_PENALTY = 50.0
 
@@ -38,22 +34,16 @@ def _run_backtest_summaries(
     (incl. reason=trend_veto) into compute_trend_veto_calibration instead of always-empty.
     _AuditCaptureHandler already matches "SIGNAL_AUDIT " prefix (P1-6 fix).
     """
-    handler = _AuditCaptureHandler()
-    strategy_logger = logging.getLogger("theman")
-    prev_level = strategy_logger.level
-    strategy_logger.addHandler(handler)
-    strategy_logger.setLevel(logging.INFO)
-    try:
+    def _run() -> None:
         engine = BacktestEngine(
             code, dates, cache_dir=cache_dir, runtime_config=runtime_config
         )
         engine.run()
-    finally:
-        strategy_logger.removeHandler(handler)
-        strategy_logger.setLevel(prev_level)
+
+    records = _run_with_audit_capture(_run)
     summaries: list[dict[str, Any]] = []
     signals: list[dict[str, Any]] = []
-    for label, payload in handler.records:
+    for label, payload in records:
         if label == "DAILY_SUMMARY":
             try:
                 summaries.append(json.loads(payload))

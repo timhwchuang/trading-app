@@ -1,16 +1,18 @@
-# 架構：四大類 + Broker 解耦（Phase 8 進行中）
+# 架構：trading-app + 三 sibling repo（2026-06-16）
 
-> 本文件記錄「把可重用核心從 theman 抽離」的目標架構與**目前已落地的第一步**。
+> 本文件記錄 **trading-app**（reference integrator）與 `trading-engine` / `trading-backtest` / `strategy-vwap-momentum` 的邊界。
 > 安全與紀律仍以 [`AGENTS.md`](../AGENTS.md) 為準（§2 護欄、§4 Gate）。
 
-## 目標：四大類（pillars）
+## 模組歸屬
 
-| 類別 | 角色 | 現況 |
-| ---- | ---- | ---- |
-| **TradingEngine** | 有狀態的決策＋執行宿主（單一狀態機；on_tick / pending / fills / session / risk） | `src/runtime/`（live + backtest 共用） |
-| **Backtest** | tick 回放驅動 + Mock 撮合（重用 TradingEngine） | `src/backtest/`（`BacktestEngine.host = TradingEngine`） |
-| **Storage** | tick / kbar 落盤與載入 | `src/storage/`（未來可轉事件 consumer） |
-| **Reporting** | log 解析 + 績效/UAT 指標 | `src/reporting/`（未來可轉事件 stream consumer） |
+| 類別 | 角色 | Repo / 路徑 |
+| ---- | ---- | ----------- |
+| **TradingEngine** | 狀態機、下單、session、risk | `trading-engine` |
+| **Backtest** | tick replay + MockBroker | `trading-backtest` |
+| **Strategy** | VWAP momentum alpha | `strategy-vwap-momentum` |
+| **Integrations** | port wiring | `trading-app/src/integrations/` |
+| **Storage** | tick / kbar 落盤 | `trading-app/src/storage/` |
+| **Reporting** | UAT log 解析 | `trading-app/src/reporting/` |
 
 ## Broker 解耦：`BrokerPort`（已落地）
 
@@ -27,11 +29,10 @@
 
 ### 已落地（Phase 8 + 三 repo 拆分）
 
-- ✅ **TradingEngine**：獨立 repo `../trading-engine`（`pip install -e ../trading-engine`）；theman `src/runtime/` 為 re-export 薄層。
-- ✅ **Strategy Protocol v1**：`trading_engine.core.strategy` 僅 `evaluate` + `reset` + optional helpers；momentum 狀態在 `strategy-vwap-momentum` plugin。
-- ✅ **Strategy plugin**：`../strategy-vwap-momentum`（entry point `vwap_momentum`）；theman `src/strategy/` 為 re-export。
-- ✅ **Backtest**：`../trading-backtest` 含 replay loop + MockBroker；theman `BacktestEngine` 薄 wrapper 注入 `theman_engine_ports`。
-- ✅ **接線**：`integrations/engine_wiring.py` → `theman_engine_ports()` + `load_named_strategy()`；live/backtest 顯式 adapter。
+- ✅ **TradingEngine**：`trading-engine`（直接 `from trading_engine.engine import TradingEngine`）
+- ✅ **Strategy plugin**：`strategy-vwap-momentum`（entry point `vwap_momentum`）
+- ✅ **Backtest**：`trading-backtest`；app 的 `backtest/engine.py` 薄 wrapper 注入 `trading_app_engine_ports`
+- ✅ **接線**：`integrations/engine_wiring.py` → `trading_app_engine_ports()` + `load_named_strategy()`
 - 🔜 **CI remote**：GitHub 僅 checkout theman 時需 submodule 或發布 PyPI；本地 monorepo 用 `scripts/ci-setup.sh`。
 
 ### 刻意保留（下一輪窄縫）

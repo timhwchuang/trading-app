@@ -1,4 +1,4 @@
-"""RuntimeConfig bridge tests (Phase 8 merge fix P0-2)."""
+"""RuntimeConfig bridge tests."""
 
 from __future__ import annotations
 
@@ -6,13 +6,17 @@ import unittest
 from unittest import mock
 
 import config as config_module
-from core.runtime_config import ThemanRuntimeConfig, _to_engine_settings, default_runtime_config
+from core.runtime_config import (
+    TradingAppRuntimeConfig,
+    _to_engine_settings,
+    default_runtime_config,
+)
 from trading_engine.core.runtime_config import RuntimeConfig as EngineRuntimeConfig
 
 
-class TestThemanRuntimeConfig(unittest.TestCase):
+class TestTradingAppRuntimeConfig(unittest.TestCase):
     def test_archive_flags_delegate_to_config_module(self):
-        cfg = ThemanRuntimeConfig(_to_engine_settings())
+        cfg = TradingAppRuntimeConfig(_to_engine_settings())
         with mock.patch.object(config_module, "TICK_ARCHIVE", True):
             self.assertTrue(cfg.tick_archive)
         with mock.patch.object(config_module, "KBARS_ARCHIVE", True):
