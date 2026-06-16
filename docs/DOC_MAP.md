@@ -15,7 +15,7 @@
 | **docs/BeforePilot.md** | trading-app | 人類決策 | UAT → Pilot 觀測項、秒停損率、對帳紀律。 |
 | **docs/RELEASE_CHECKLIST.md** | 各 repo | 發布者 | Tag 前機械檢查（測試、版本、密鑰）。 |
 | **SPEC.md** | 各 repo | 整合者 | 套件邊界、公開 API、依賴方向。 |
-| **docs/SWEEP_SPEC.md** | trading-app | 研究 | 確定性 hash、`param_sweep`、`uat_report` 編排 |
+| **docs/SWEEP_SPEC.md** | trading-app | 研究 | 確定性 hash、`param_sweep`、`calibration_cli` 編排 |
 | **docs/BackTestingSpec.md** | trading-app | stub | 索引 → sibling BACKTEST_* / CALIBRATION / SWEEP_SPEC |
 | **docs/ARCHIVE/** | trading-app | archive | 歷史週報、monolith `BackTestingSpec`；**非現行真相** |
 

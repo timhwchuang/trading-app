@@ -11,6 +11,7 @@ from backtest.engine import BacktestEngine
 from config import SWEEP_DD_PENALTY, SWEEP_SCORE_METRIC, SWEEP_SL_PENALTY
 from core.runtime_config import default_runtime_config
 from reporting.performance_metrics import aggregate_daily_performance, sweep_score_from_kpi
+from reporting.forward_pnl import ForwardPnlPolicy, load_tick_series, make_replay_forward_pnl
 from reporting.trend_calibration import compute_trend_veto_calibration
 from storage.tick_loader import DEFAULT_CACHE_DIR
 from strategy_vwap_momentum import apply_strategy_params, restore_strategy_params
@@ -102,6 +103,20 @@ def valid_score(valid_kpi: dict[str, Any], *, penalty: float = DEFAULT_PENALTY) 
     return float(valid_kpi.get("daily_pnl_points", 0.0)) - penalty * rate
 
 
+def _resolve_forward_pnl(
+    code: str,
+    dates_valid: list,
+    cache_path: Path,
+    forward_policy: ForwardPnlPolicy | None,
+):
+    if forward_policy is None:
+        return None
+    series = load_tick_series(code, dates_valid, cache_dir=cache_path)
+    if not series.timestamps:
+        return None
+    return make_replay_forward_pnl(series, forward_policy)
+
+
 def sweep(
     grid: dict[str, list],
     dates_train: list,
@@ -111,9 +126,11 @@ def sweep(
     *,
     penalty: float = DEFAULT_PENALTY,
     output_path: Path | None = None,
+    forward_policy: ForwardPnlPolicy | None = None,
 ) -> list[dict[str, Any]]:
     """Cartesian grid sweep; ranking uses valid (out-of-sample) KPI only."""
     cache_path = Path(cache_dir)
+    replay_fwd = _resolve_forward_pnl(code, dates_valid, cache_path, forward_policy)
     keys = list(grid.keys())
     combos = itertools.product(*(grid[k] for k in keys))
     results: list[dict[str, Any]] = []
@@ -156,7 +173,11 @@ def sweep(
                         and str(s.get("reason", "")).lower() not in ("trend_veto", "trend veto")
                     ]
                     veto_metrics = compute_trend_veto_calibration(
-                        veto_audits, allowed_audits=allowed_audits or None
+                        veto_audits,
+                        allowed_audits=allowed_audits or None,
+                        get_forward_pnl=replay_fwd,
+                        forward_policy=forward_policy,
+                        b_class=replay_fwd is not None,
                     )
                 except Exception:
                     veto_metrics = {"note": "harness call failed (synthetic path)"}

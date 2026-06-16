@@ -11,13 +11,13 @@
 | **Phase 3 UAT** | **可開跑** — 待永豐模擬 API 金鑰 → [`docs/UAT_CHECKLIST.md`](docs/UAT_CHECKLIST.md) |
 | Phase 4 運維骨架 | ✅ P4-1～12 已落地；Pilot 前 Telegram / 斷網實機驗收 |
 | Phase 5 Pilot | 待 UAT 全過 + CA；秒停損率為硬指標 → [`docs/BeforePilot.md`](docs/BeforePilot.md) |
-| Phase 6 策略真實化 | 骨架 ✅（旗標預設關）；**B 類校準待 UAT tick**；P6-4/5 待做 |
+| Phase 6 策略真實化 | 骨架 ✅（旗標預設關）；**B 類 tooling ✅**（待 UAT tick 跑 CAL-8）；P6-4/5 待做 |
 | Phase 7 策略介面 | ✅ `trading-engine` Protocol + `strategy-vwap-momentum` plugin |
 | Phase 8 三 repo | ✅ 已發布 v0.1.1；`trading_app_engine_ports()` 接線 |
 
 > **UAT Ready ≠ Live Ready**。Phase 6 是 Live gate，不是 UAT gate。
 
-**測試基線**：`python run_tests.py` — trading-app **69**；siblings 各自 `run_tests.py`（engine / backtest 27 / strategy 31）。
+**測試基線**：`python run_tests.py` — trading-app **76**；siblings 各自 `run_tests.py`（engine / backtest 27 / strategy 31）。
 
 ---
 
@@ -35,8 +35,8 @@
 
 ### P6-1-CAL B 類（6～8）
 
-- [ ] 真實 UAT tick 回測校準 `trend_min_strength` / `k` 係數
-- [ ] `param_sweep` + `uat_report` veto_metrics 決策
+- [x] `forward_pnl.py` tick replay + `calibration_cli` + `param_sweep(forward_policy=...)`
+- [ ] **人類**：UAT tick ≥5 日 → `python -m reporting.calibration_cli ... --sweep` → CAL-8 Go/No-Go
 - owner: `strategy-vwap-momentum` + `trading-app/sweep`
 
 ### P6-4 Position sizing

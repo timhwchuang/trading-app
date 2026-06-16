@@ -30,7 +30,13 @@ from __future__ import annotations
 
 import statistics
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
+
+from reporting.forward_pnl import ForwardPnlPolicy, load_tick_series, make_replay_forward_pnl, policy_summary
+from reporting.uat_report import parse_log_audits_and_fills, read_log_lines
+from storage.tick_loader import DEFAULT_CACHE_DIR
+from trading_engine.core.audit.signal_audit import SignalAudit
 
 
 @dataclass
@@ -99,20 +105,120 @@ def make_synthetic_veto_scenario(
                 }
             )
 
-    def _forward(price: float, idx: int) -> float:
+    def _forward(price: float, idx: int, direction_arg: str = direction) -> float:
         j = min(len(prices) - 1, idx + window_bars)
         delta = prices[j] - price
-        sign = 1.0 if direction == "Long" else -1.0
+        sign = 1.0 if direction_arg in ("Long", "Buy", "buy", "long") else -1.0
         return sign * delta
 
     return veto_audits, _forward
+
+
+def audit_to_dict(audit: Any) -> dict[str, Any]:
+    if isinstance(audit, dict):
+        return dict(audit)
+    if isinstance(audit, SignalAudit):
+        from dataclasses import asdict
+
+        return asdict(audit)
+    return {
+        "intent": getattr(audit, "intent", ""),
+        "direction": getattr(audit, "direction", "Buy"),
+        "price": float(getattr(audit, "price", 0.0)),
+        "ts": getattr(audit, "ts", 0),
+        "reason": getattr(audit, "reason", ""),
+        "trend_dir": getattr(audit, "trend_dir", ""),
+        "trend_strength": getattr(audit, "trend_strength", 0.0),
+        "atr": getattr(audit, "atr", 0.0),
+    }
+
+
+def partition_trend_entry_audits(
+    audits: Iterable[Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split entry SIGNAL_AUDIT rows into trend_veto vs allowed candidates."""
+    veto: list[dict[str, Any]] = []
+    allowed: list[dict[str, Any]] = []
+    for audit in audits:
+        row = audit_to_dict(audit)
+        if row.get("intent") != "entry":
+            continue
+        reason = str(row.get("reason", "")).lower()
+        if reason in ("trend_veto", "trend veto"):
+            veto.append(row)
+        else:
+            allowed.append(row)
+    return veto, allowed
+
+
+def run_b_class_calibration(
+    *,
+    log_lines: list[str] | None = None,
+    log_paths: list[Path] | None = None,
+    code: str,
+    dates: list,
+    cache_dir: Path | str = DEFAULT_CACHE_DIR,
+    forward_policy: ForwardPnlPolicy | None = None,
+) -> dict[str, Any]:
+    """CAL-6/7: parse UAT/backtest log + tick replay forward policy → harness metrics."""
+    if log_lines is None:
+        if not log_paths:
+            raise ValueError("run_b_class_calibration requires log_lines or log_paths")
+        log_lines = read_log_lines([Path(p) for p in log_paths])
+
+    audits, _fills = parse_log_audits_and_fills(log_lines)
+    veto_audits, allowed_audits = partition_trend_entry_audits(audits)
+
+    pol = forward_policy or ForwardPnlPolicy()
+    series = load_tick_series(code, dates, cache_dir=cache_dir)
+    if not series.timestamps:
+        return {
+            "status": "no_ticks",
+            "code": code,
+            "dates": [d.isoformat() for d in dates],
+            "cache_dir": str(cache_dir),
+            "n_veto": len(veto_audits),
+            "n_allowed": len(allowed_audits),
+            "forward_policy": policy_summary(pol),
+            "notes": "B-class blocked: tick_cache empty for requested dates.",
+        }
+
+    get_forward_pnl = make_replay_forward_pnl(series, pol)
+    metrics = compute_trend_veto_calibration(
+        veto_audits,
+        allowed_audits=allowed_audits or None,
+        get_forward_pnl=get_forward_pnl,
+        forward_policy=pol,
+        b_class=True,
+    )
+    metrics["status"] = "ok"
+    metrics["code"] = code
+    metrics["dates"] = [d.isoformat() for d in dates]
+    metrics["tick_count"] = len(series)
+    metrics["forward_policy"] = policy_summary(pol)
+    return metrics
+
+
+DEFAULT_TREND_MIN_STRENGTH_GRID = [0.0, 0.3, 0.5, 0.8, 1.0, 1.5]
+
+
+def _invoke_forward_pnl(
+    fwd: Callable[..., float],
+    rec: _VetoRecord,
+) -> float:
+    try:
+        return float(fwd(rec.price, int(rec.ts), rec.direction))
+    except TypeError:
+        return float(fwd(rec.price, int(rec.ts)))
 
 
 def compute_trend_veto_calibration(
     veto_audits: Iterable[Any],
     allowed_audits: Iterable[Any] | None = None,
     *,
-    get_forward_pnl: Callable[[float, int], float] | None = None,
+    get_forward_pnl: Callable[..., float] | None = None,
+    forward_policy: ForwardPnlPolicy | None = None,
+    b_class: bool = False,
 ) -> dict[str, Any]:
     """Core harness: conditional expectation of the trend veto.
 
@@ -154,24 +260,21 @@ def compute_trend_veto_calibration(
         # Explicitly dead toy for safety. Real callers *must* override.
         return 0.0
 
+    using_custom_fwd = get_forward_pnl is not None
     fwd = get_forward_pnl or _default_fwd
 
     veto_forwards: list[float] = []
     for rec in veto_list:
-        # Use rec.ts as original index when provided by synthetic builder (ts set to the veto_at price index).
-        # For real audits, caller must supply a get_forward_pnl that can resolve by rec.ts / rec.price.
-        idx = rec.ts if isinstance(rec.ts, (int, float)) else 0
         try:
-            f = fwd(rec.price, int(idx))
+            f = _invoke_forward_pnl(fwd, rec)
         except Exception:
             f = 0.0
         veto_forwards.append(f)
 
     allowed_forwards: list[float] = []
     for rec in allowed_list:
-        idx = rec.ts if isinstance(rec.ts, (int, float)) else 0
         try:
-            f = fwd(rec.price, int(idx))
+            f = _invoke_forward_pnl(fwd, rec)
         except Exception:
             f = 0.0
         allowed_forwards.append(f)
@@ -180,6 +283,22 @@ def compute_trend_veto_calibration(
     mean_allowed = statistics.mean(allowed_forwards) if allowed_forwards else 0.0
     delta = mean_allowed - mean_veto
 
+    if b_class and forward_policy is not None:
+        notes = (
+            f"B-class replay forward policy: {policy_summary(forward_policy)}. "
+            "Use for Go/No-Go only with ≥5 UAT days and human sign-off (CAL-8)."
+        )
+    elif using_custom_fwd:
+        notes = (
+            "Replay forward PnL supplied. Document policy per run; "
+            "multi-day stability still required before opening trend_filter_enabled."
+        )
+    else:
+        notes = (
+            "SYNTHETIC GUARD: toy numbers only. Real delta/veto_rate for Go/No-Go "
+            "require UAT replay + documented forward policy (CAL-2/5/7)."
+        )
+
     return {
         "veto_rate": round(veto_rate, 4),
         "n_veto": n_veto,
@@ -187,5 +306,5 @@ def compute_trend_veto_calibration(
         "mean_forward_if_vetoed": round(mean_veto, 4),
         "mean_forward_allowed": round(mean_allowed, 4),
         "delta_expectancy": round(delta, 4),
-        "notes": "SYNTHETIC GUARD: toy numbers only. Real delta/veto_rate for Go/No-Go require UAT replay + documented forward policy (CAL-2/5/7).",
+        "notes": notes,
     }

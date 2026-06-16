@@ -53,6 +53,8 @@ Output: `sweep_result.jsonl`
 
 When grid contains `trend_*` keys, attach `veto_metrics` from harness.
 
+**B-class replay**: pass `forward_policy=ForwardPnlPolicy(...)` to `sweep()`. When tick_cache has data for `dates_valid`, `veto_metrics.delta_expectancy` uses `reporting/forward_pnl.py` (not toy 0). CLI: `python -m reporting.calibration_cli ... --sweep`.
+
 ### KPI aggregation (7.8)
 
 `quick_stop_loss_rate` = `Σ quick_sl / Σ exits` (weighted, not daily average).
@@ -83,13 +85,15 @@ When grid contains `trend_*` keys, attach `veto_metrics` from harness.
 | Param sweep | `src/sweep/param_sweep.py` |
 | UAT report | `src/reporting/uat_report.py` |
 | Trend harness | `src/reporting/trend_calibration.py` |
+| Forward PnL replay | `src/reporting/forward_pnl.py` |
+| B-class CLI | `src/reporting/calibration_cli.py` |
 | Tests | `tests/sweep/`, `tests/reporting/` |
 
 ---
 
 ## Definition of done (app integration)
 
-- [x] `python run_tests.py` — 69 tests green
+- [x] `python run_tests.py` — 76 tests green
 - [x] Same inputs → same hash (with fills path)
 - [x] Sweep restores config after grid
 - [x] `uat_report` parses backtest logs
