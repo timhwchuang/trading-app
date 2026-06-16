@@ -98,6 +98,36 @@ class TestTrendHelpers(unittest.TestCase):
         )
         self.assertEqual(direction, "Flat")
 
+    def test_compute_trend_atr_normalization(self):
+        """A: ATR normalization makes min_strength comparable across modes and vol regimes."""
+        closes = [100.0 + i for i in range(60)]
+        raw_atr = 5.0
+
+        # Without ATR: use raw strength (old behavior when atr=0)
+        d_raw, s_raw = compute_trend(
+            closes, mode="ema", timeframe_min=5, ema_period=10, min_strength=10.0, atr=0.0
+        )
+        self.assertEqual(d_raw, "Long")  # 18.8 > 10 raw
+
+        # With ATR: effective = raw / atr
+        # 18.8 / 5.0 = 3.76 > 2.0 → still Long
+        d_norm, _ = compute_trend(
+            closes, mode="ema", timeframe_min=5, ema_period=10, min_strength=2.0, atr=raw_atr
+        )
+        self.assertEqual(d_norm, "Long")
+
+        # Higher ATR threshold: 18.8 / 5 = 3.76 < 4.0 → Flat (normalized gate works)
+        d_norm, _ = compute_trend(
+            closes, mode="ema", timeframe_min=5, ema_period=10, min_strength=4.0, atr=raw_atr
+        )
+        self.assertEqual(d_norm, "Flat")
+
+        # Slope mode with same ATR threshold should behave consistently in "ATR units"
+        d_slope, _ = compute_trend(
+            closes, mode="slope", timeframe_min=1, slope_min=0.0, min_strength=0.3, atr=raw_atr
+        )
+        self.assertEqual(d_slope, "Long")  # slope raw is small but /atr still passes low threshold
+
     def test_linear_regression_slope(self):
         slope = linear_regression_slope([100.0, 101.0, 102.0, 103.0])
         self.assertAlmostEqual(slope, 1.0)

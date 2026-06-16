@@ -89,10 +89,10 @@ strategy:
   trend_ema_period: 20
   trend_slope_min: 0.0
   # Level 2 min_strength for the trend filter (P6-1).
-  # WARNING: 0.0 is the MOST AGGRESSIVE (strictest) setting — any small HTF
-  # drift becomes a vetoable "trend". Higher values loosen the filter
-  # (more Flat → fewer vetoes). See trend.py docstring for details.
-  # Must be calibrated on UAT tick data before enabling the filter.
+  # When ATR is passed (engine does this), min_strength is compared in ATR units
+  # (strength / atr). 0.0 = most aggressive (any drift can veto).
+  # Higher = looser filter. See full warning + calibration notes in trend.py.
+  # Must be UAT-tick calibrated before enabling trend_filter_enabled.
   trend_min_strength: 0.0
   atr_trailing_enabled: false
   trail_atr_k: 0.25

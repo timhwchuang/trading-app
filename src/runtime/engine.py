@@ -420,6 +420,7 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
                     ema_period=TREND_EMA_PERIOD,
                     slope_min=TREND_SLOPE_MIN,
                     min_strength=TREND_MIN_STRENGTH,
+                    atr=atr,  # for ATR-normalized min_strength gating (A from review)
                 )
             else:
                 with self.lock:

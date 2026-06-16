@@ -106,14 +106,22 @@ def compute_trend(
     ema_period: int = 20,
     slope_min: float = 0.0,
     min_strength: float = 0.0,
+    atr: float = 0.0,
 ) -> tuple[str, float]:
     """High-timeframe trend / regime from (typically 1-minute) closes.
 
     mode="ema":   last vs EMA on resampled HTF closes.
     mode="slope": linreg price slope on resampled HTF closes.
 
+    atr (recommended):
+        When > 0, strength is normalized as strength / atr before comparing to
+        min_strength. This makes the threshold comparable across "ema" vs "slope"
+        modes and across different volatility regimes. The *raw* strength is still
+        returned (for audit / logging / future logic).
+
     min_strength (Level 2):
-        If a direction is detected but |strength| < min_strength, force "Flat", 0.0.
+        If a direction is detected but (normalized) strength < min_strength,
+        force "Flat", 0.0.
         This makes "Long"/"Short" labels meaningful (only when the HTF move has legs).
 
         ⚠️ SEMANTICS WARNING (critical for traders):
@@ -128,11 +136,9 @@ def compute_trend(
           strictest veto behavior. Always calibrate and document your intended
           min_strength.
 
-        Strength units (different per mode — consider ATR normalization later):
-          - ema mode: price points of deviation from the window EMA/displacement
-          - slope mode: absolute slope (price change per resampled bar)
-        Typical useful values (after UAT tick calibration): 3.0 ~ 10.0+ pts
-        depending on product, TF, and mode.
+        When atr is supplied (normal case from engine), min_strength is interpreted
+        in "ATR units" (e.g. 0.5 means "at least 0.5 ATR of HTF strength").
+        Typical calibrated values after UAT: 0.3 ~ 1.5+ ATR depending on product/TF/mode.
     """
     resampled = resample_closes(closes, timeframe_min)
     if mode == "slope":
@@ -142,8 +148,12 @@ def compute_trend(
 
     # Level 2: only commit to a trend label when the move is strong enough.
     # This is what gives the filter real practical filtering power.
-    if direction != "Flat" and strength < min_strength:
-        return "Flat", 0.0
+    if direction != "Flat":
+        eff_strength = strength
+        if atr > 1e-6:
+            eff_strength = strength / atr
+        if eff_strength < min_strength:
+            return "Flat", 0.0
     return direction, strength
 
 
