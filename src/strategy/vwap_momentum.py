@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import datetime
 import logging
-from dataclasses import dataclass
 from typing import Callable, Optional, TYPE_CHECKING
 
 from core.audit.signal_audit import SignalAudit
@@ -14,8 +13,10 @@ from core.types import (
     OrderSignal,
     PositionSnapshot,
     RiskGate,
+    StrategySideEffects,
 )
 from exchange_time import is_at_or_after
+from strategy.base import BaseStrategy
 from strategy.params import StrategyParams
 from strategy.phase6 import (
     dynamic_trail_points,
@@ -31,12 +32,7 @@ logger = logging.getLogger(__name__)
 MOMENTUM_TIMEOUT_SEC = 180
 
 
-@dataclass
-class StrategySideEffects:
-    block_new_entry: bool = False
-
-
-class VWAPMomentumLogic:
+class VWAPMomentumLogic(BaseStrategy):
     """Pure strategy decisions; momentum episode state lives here."""
 
     def __init__(

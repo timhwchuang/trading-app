@@ -102,7 +102,8 @@ python -m live
 | `config/config.yaml`    | 策略參數、交易時段、開盤量能階梯（**不含密鑰**） |
 | `src/config.py`         | YAML 載入器                                    |
 | `src/runtime/`          | 狀態機、下單、session（`TradingEngine`）       |
-| `src/strategy/`         | VWAP momentum 策略邏輯                         |
+| `src/strategy/`         | 策略邏輯（實現 `Strategy` interface，可插拔）     |
+|                         | 目前內建 VWAP Momentum（含 Phase 6 趨勢/ATR 動態） |
 | `src/storage/`          | tick/kbar 快取與 live 落盤                       |
 | `src/backtest/`         | 回測引擎與 mock broker                         |
 | `src/reporting/`        | UAT 報告與績效指標                             |

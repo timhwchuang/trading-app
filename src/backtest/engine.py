@@ -8,6 +8,7 @@ from typing import List
 from config import ATR_REFRESH_SEC, SESSION_END, SESSION_START
 from exchange_time import is_trading_session
 from runtime.engine import VWAPMomentumStrategy
+from strategy.base import Strategy
 from backtest.mock_broker import MockBroker
 from storage.tick_loader import DEFAULT_CACHE_DIR
 
@@ -41,10 +42,16 @@ class BacktestEngine:
         code: str,
         dates: List[datetime.date],
         cache_dir=DEFAULT_CACHE_DIR,
+        strategy: Strategy | None = None,
     ) -> None:
+        """strategy: pluggable decision Strategy (see strategy.base.Strategy).
+        If None, the default VWAP momentum strategy is used.
+        """
         self.clock = VirtualClock()
         self.broker = MockBroker(clock=self.clock, cache_dir=cache_dir)
-        self.strategy = VWAPMomentumStrategy(api=self.broker, clock=self.clock)
+        self.strategy = VWAPMomentumStrategy(
+            api=self.broker, clock=self.clock, strategy=strategy
+        )
         self.strategy.contract = self.broker.resolve_contract(code)
         self.strategy._maybe_refresh_atr = _noop_maybe_refresh_atr
         self.strategy._order_sync_mode = True

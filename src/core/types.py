@@ -68,3 +68,13 @@ class RiskGate:
     daily_pnl: float
     after_flatten_time: bool
     force_flatten: bool
+
+
+@dataclass
+class StrategySideEffects:
+    """Side effects returned by a Strategy's evaluate() method.
+
+    Currently only used for the daily loss block, but kept extensible.
+    """
+
+    block_new_entry: bool = False

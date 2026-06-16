@@ -38,6 +38,7 @@ from alerts import send_alert
 from strategy.phase6 import compute_trend
 from strategy.indicators import IndicatorState
 from strategy.vwap_momentum import VWAPMomentumLogic
+from strategy.base import Strategy
 from core.types import PositionSnapshot, RiskGate
 
 from config import (
@@ -111,7 +112,7 @@ from runtime.order_executor import OrderExecutorMixin
 from runtime.session import SessionMixin
 
 class TradingEngine(OrderExecutorMixin, SessionMixin):
-    def __init__(self, api: Any = None, clock: Any = None):
+    def __init__(self, api: Any = None, clock: Any = None, strategy: Strategy | None = None):
         self.api = api if api is not None else sj.Shioaji(simulation=SIMULATION)
         # 注入式時鐘：實盤預設 time.time()；回測傳入 tick 時間驅動的時鐘以確保確定性。
         self._clock = clock if clock is not None else time.time
@@ -153,7 +154,7 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
 
         self.indicators = IndicatorState()
         self._obs = DailyObservability()
-        self._logic = VWAPMomentumLogic(obs=self._obs)
+        self.strategy: Strategy = strategy or VWAPMomentumLogic(obs=self._obs)
 
         self.lock = threading.Lock()
         self.contract = None
@@ -227,35 +228,35 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
 
     @property
     def momentum_active(self) -> bool:
-        return self._logic.momentum.active
+        return self.strategy.momentum.active
 
     @momentum_active.setter
     def momentum_active(self, value: bool) -> None:
-        self._logic.momentum.active = value
+        self.strategy.momentum.active = value
 
     @property
     def momentum_dir(self) -> str:
-        return self._logic.momentum.direction
+        return self.strategy.momentum.direction
 
     @momentum_dir.setter
     def momentum_dir(self, value: str) -> None:
-        self._logic.momentum.direction = value
+        self.strategy.momentum.direction = value
 
     @property
     def momentum_trigger_time(self) -> int:
-        return self._logic.momentum.trigger_time
+        return self.strategy.momentum.trigger_time
 
     @momentum_trigger_time.setter
     def momentum_trigger_time(self, value: int) -> None:
-        self._logic.momentum.trigger_time = value
+        self.strategy.momentum.trigger_time = value
 
     @property
     def momentum_peak(self) -> float:
-        return self._logic.momentum.peak
+        return self.strategy.momentum.peak
 
     @momentum_peak.setter
     def momentum_peak(self, value: float) -> None:
-        self._logic.momentum.peak = value
+        self.strategy.momentum.peak = value
 
     def _build_entry_audit(
         self, dt: datetime.datetime, price: float, ts: int, direction: str
@@ -263,7 +264,7 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
         vol_threshold = self._vol_threshold(dt)
         market = self.indicators.snapshot(ts, price, dt)
         base_vol, multiplier, threshold = vol_threshold
-        return self._logic._build_entry_audit(
+        return self.strategy._build_entry_audit(
             market, direction, multiplier, threshold
         )
 
@@ -278,7 +279,7 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
     ) -> SignalAudit:
         dt = self._last_tick_exchange_dt or datetime.datetime.fromtimestamp(ts)
         market = self.indicators.snapshot(ts, price, dt)
-        return self._logic._build_exit_audit(
+        return self.strategy._build_exit_audit(
             market, direction, reason, trail_points_used=trail_points_used
         )
 
@@ -287,7 +288,7 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
     ) -> OrderSignal:
         dt = self._last_tick_exchange_dt or datetime.datetime.fromtimestamp(ts)
         market = self.indicators.snapshot(ts, price, dt)
-        signal, _effects = self._logic._session_force_flatten_signal(
+        signal, _effects = self.strategy._session_force_flatten_signal(
             market,
             self._position_snapshot(),
             SESSION_FORCE_FLATTEN_TIME,
@@ -366,8 +367,8 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
                 if self._resynced_position:
                     self._calibrate_trailing_peak_after_resync(price)
                 self._update_trailing_peak(price)
-            elif self._logic.momentum.active:
-                self._logic.update_momentum_peak(price)
+            elif self.strategy.momentum.active:
+                self.strategy.update_momentum_peak(price)
             signal = self.process_strategy(ts, price, tick.datetime)
             if signal is not None:
                 if signal.intent == "entry":

@@ -1,14 +1,22 @@
-"""Shared test utilities (P2-8: avoid real Shioaji client in unit tests)."""
+"""Shared test utilities (P2-8: avoid real Shioaji client in unit tests).
+
+make_strategy now accepts an optional pluggable `strategy` (decision logic)
+to exercise the new interface injection.
+"""
 
 from __future__ import annotations
 
 from unittest.mock import MagicMock
 
 from runtime.engine import VWAPMomentumStrategy
+from strategy.base import Strategy
 
 
-def make_strategy() -> VWAPMomentumStrategy:
-    return VWAPMomentumStrategy(api=MagicMock())
+def make_strategy(strategy: Strategy | None = None) -> VWAPMomentumStrategy:
+    """Create a TradingEngine (aliased as VWAPMomentumStrategy for back-compat)
+    with a mock API. Pass a custom `strategy` to use a different decision impl.
+    """
+    return VWAPMomentumStrategy(api=MagicMock(), strategy=strategy)
 
 
 def arm_pending_entry(

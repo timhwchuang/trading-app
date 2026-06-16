@@ -87,5 +87,38 @@ class TestStrategyPhase6(unittest.TestCase):
         )
 
 
+# --- Interface injection test (new for pluggable strategies) ---
+
+from strategy.base import BaseStrategy, StrategySideEffects
+from unittest.mock import MagicMock
+
+
+class _DummyStrategy(BaseStrategy):
+    """Trivial strategy for testing injection. Always returns no signal."""
+    def evaluate(self, *a, **k):
+        return None, StrategySideEffects()
+
+    def reset(self):
+        pass
+
+
+class TestStrategyInterfaceInjection(unittest.TestCase):
+    def test_make_strategy_accepts_custom_decision_strategy(self):
+        from test_helpers import make_strategy
+
+        dummy = _DummyStrategy()
+        host = make_strategy(strategy=dummy)
+
+        self.assertIs(host.strategy, dummy)
+
+    def test_trading_engine_constructor_accepts_strategy(self):
+        from runtime.engine import TradingEngine
+
+        dummy = _DummyStrategy()
+        host = TradingEngine(api=MagicMock(), strategy=dummy)
+
+        self.assertIs(host.strategy, dummy)
+
+
 if __name__ == "__main__":
     unittest.main()

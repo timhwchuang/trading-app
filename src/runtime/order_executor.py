@@ -125,7 +125,7 @@ class OrderExecutorMixin:
         self._maybe_reset_daily_state(dt)
         market = self.indicators.snapshot(ts, price, dt)
         vol_threshold = self._vol_threshold(dt)
-        signal, effects = self._logic.evaluate(
+        signal, effects = self.strategy.evaluate(
             market,
             self._position_snapshot(),
             self._risk_gate(ts, dt),
@@ -142,15 +142,15 @@ class OrderExecutorMixin:
         return signal
 
     def activate_momentum(self, direction: str, price: float, ts: int):
-        self._logic.activate_momentum(direction, price, ts)
+        self.strategy.activate_momentum(direction, price, ts)
 
     def reset_momentum(self):
-        self._logic.reset_momentum()
+        self.strategy.reset_momentum()
 
     def manage_exit(self, price: float, ts: int) -> Optional[OrderSignal]:
         dt = self._last_tick_exchange_dt or datetime.datetime.fromtimestamp(ts)
         market = self.indicators.snapshot(ts, price, dt)
-        signal, _effects = self._logic.manage_exit(
+        signal, _effects = self.strategy.manage_exit(
             market, self._position_snapshot()
         )
         return signal
