@@ -45,6 +45,17 @@ class TestTrendHelpers(unittest.TestCase):
         closes = [float(i) for i in range(10)]
         self.assertEqual(resample_closes(closes, 5), [4.0, 9.0])
 
+    def test_resample_closes_includes_latest_bar(self):
+        """B: resample must always represent the most recent price (critical at decision time)."""
+        closes = [float(i) for i in range(12)]  # 0..11
+        # 5m stride from end: should end with 11 (the latest)
+        res = resample_closes(closes, 5)
+        self.assertEqual(res[-1], 11.0)
+        # Another length not multiple
+        closes2 = [float(i) for i in range(13)]
+        res2 = resample_closes(closes2, 5)
+        self.assertEqual(res2[-1], 12.0)  # latest included even in partial bucket
+
     def test_compute_trend_ema_mode(self):
         closes = [100.0 + i for i in range(60)]
         direction, strength = compute_trend(

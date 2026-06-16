@@ -413,8 +413,19 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
             atr = IndicatorState.compute_atr(kbars)
             if TREND_FILTER_ENABLED:
                 closes = list(getattr(kbars, "Close", []) or [])
+                trend_closes = closes
+                if used_long:
+                    # B (review): when we pulled multi-day kbars for stable ATR (current_atr==0
+                    # or first time today), limit the data fed to trend computation.
+                    # This mitigates the worst cross-session / night-session / gap pollution
+                    # exactly at open, when the filter is most needed and the naive stride
+                    # + last-N resampled would otherwise pull in yesterday's close + jump.
+                    # We still allow ~2 trading days of 1m bars so the HTF detector has
+                    # enough history, but we cut the ancient data that creates fake "trends".
+                    approx_bars_per_trading_day = 400  # TXF ~330-390 1m bars + buffer
+                    trend_closes = closes[-approx_bars_per_trading_day * 2 :]
                 trend_dir, trend_strength = compute_trend(
-                    closes,
+                    trend_closes,
                     mode=TREND_MODE,
                     timeframe_min=TREND_TIMEFRAME_MIN,
                     ema_period=TREND_EMA_PERIOD,

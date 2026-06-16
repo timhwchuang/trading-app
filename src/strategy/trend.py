@@ -32,15 +32,28 @@ def ema(values: Sequence[float], period: int) -> float | None:
 def resample_closes(closes: Sequence[float], timeframe_min: int) -> list[float]:
     """Naive stride downsample of 1m closes to higher timeframe.
 
-    Picks approximately the last close of each N-minute bucket by striding.
-    Not a true time-bucket resampler (ignores gaps/missing bars). For
-    production HTF signals prefer fetching the actual higher-TF kbars when possible.
+    Aligned from the *end* so that the most recent close is always represented
+    in the last output bar (important for "current regime" at decision time).
+    Still a crude stride (not true datetime-bucketed resampling). It can cross
+    session gaps when the input closes span multiple days.
+
+    For production: strongly prefer fetching actual higher-TF kbars (e.g. 5m/15m)
+    directly from the API for the relevant session, or implement proper
+    time-bucket resampling using bar timestamps.
     """
     if timeframe_min <= 1:
         return list(closes)
+    n = len(closes)
+    if n == 0:
+        return []
     out: list[float] = []
-    for i in range(timeframe_min - 1, len(closes), timeframe_min):
+    # Walk backward from the very last bar so closes[-1] is guaranteed to be
+    # included (or be the representative of the last, possibly partial, bucket).
+    i = n - 1
+    while i >= 0:
         out.append(closes[i])
+        i -= timeframe_min
+    out.reverse()
     return out
 
 
