@@ -10,6 +10,4 @@ class TradingAppAlertPort:
         return send_alert(message, level=level)
 
 
-ThemanAlertPort = TradingAppAlertPort
-
-__all__ = ["ThemanAlertPort", "TradingAppAlertPort"]
+__all__ = ["TradingAppAlertPort"]

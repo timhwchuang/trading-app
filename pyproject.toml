@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trading-app"
-version = "0.1.0"
+version = "0.1.1"
 description = "Reference integrator app: wires trading-engine, trading-backtest, and strategy plugins for Windows live UAT"
 readme = "README.md"
 requires-python = ">=3.11"

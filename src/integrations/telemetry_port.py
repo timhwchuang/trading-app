@@ -78,6 +78,4 @@ class TradingAppTelemetryPort:
         )
 
 
-ThemanTelemetryPort = TradingAppTelemetryPort
-
-__all__ = ["ThemanTelemetryPort", "TradingAppTelemetryPort"]
+__all__ = ["TradingAppTelemetryPort"]

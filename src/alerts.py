@@ -46,7 +46,7 @@ def _post_json(url: str, payload: dict[str, Any], *, timeout: float = 10.0) -> b
 
 def _send_alert_sync(message: str, *, level: str = "WARNING") -> bool:
     """Blocking network I/O; only call from the alert worker thread."""
-    text = f"[theman][{level}] {message}"
+    text = f"[trading-app][{level}] {message}"
     sent = False
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
     chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()

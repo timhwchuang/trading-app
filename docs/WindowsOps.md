@@ -9,7 +9,7 @@
 - [ ] 系統時區 **台北 (UTC+8)**；自動對時已開啟（`w32tm /query /status`）
 - [ ] 環境變數已設定（User 或 System）：
   - `SJ_API_KEY` / `SJ_SEC_KEY`
-  - `LOG_FILE=C:\logs\theman-uat.log`
+  - `LOG_FILE=C:\logs\trading-app-uat.log`
   - `TICK_ARCHIVE=1`（UAT 累積 tick）
   - `KBARS_ARCHIVE=1`（UAT 累積 kbars，供回測 ATR 熱身）
   - 選配：`TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` 或 `ALERT_WEBHOOK_URL`
@@ -42,8 +42,8 @@
 
 ```powershell
 # 以系統管理員 PowerShell 執行
-cd C:\theman
-.\scripts\windows\register-task.ps1 -ProjectRoot C:\theman
+cd C:\trading-app
+.\scripts\windows\register-task.ps1 -ProjectRoot C:\trading-app
 ```
 
 - 開機觸發；失敗每 1 分鐘重試最多 3 次
@@ -52,13 +52,13 @@ cd C:\theman
 ### 方案 B：NSSM 服務（Pilot 可選）
 
 1. 下載 [NSSM](https://nssm.cc/) 並加入 PATH
-2. `nssm install theman "C:\theman\.venv\Scripts\python.exe" "-m" "live"`
-3. 設定 `AppDirectory=C:\theman\src`；Environment 加入 API keys
+2. `nssm install trading-app "C:\trading-app\.venv\Scripts\python.exe" "-m" "live"`
+3. 設定 `AppDirectory=C:\trading-app\src`；Environment 加入 API keys
 
 ### 手動啟動（開發 / 除錯）
 
 ```powershell
-.\scripts\windows\start-theman.ps1 -ProjectRoot C:\theman
+.\scripts\windows\start-trading-app.ps1 -ProjectRoot C:\trading-app
 ```
 
 ## 收盤後維護

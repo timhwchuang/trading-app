@@ -47,6 +47,4 @@ class TradingAppTrendRefresh:
         )
 
 
-ThemanTrendRefresh = TradingAppTrendRefresh
-
-__all__ = ["ThemanTrendRefresh", "TradingAppTrendRefresh"]
+__all__ = ["TradingAppTrendRefresh"]

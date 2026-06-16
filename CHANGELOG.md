@@ -4,6 +4,21 @@ All notable changes to `trading-app` are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).  
 Versioning follows [SemVer](https://semver.org/) (0.x = API may still evolve).
 
+## [0.1.1] - 2026-06-16
+
+### Changed
+
+- Remove deprecated `theman_*` port / config aliases; use `trading_app_*` symbols only
+- Alert prefix `[theman]` → `[trading-app]`
+- Windows ops: `start-trading-app.ps1`, `register-task.ps1` default task `trading-app-vwap`
+- Pin siblings: `trading-backtest@v0.1.1`, `strategy-vwap-momentum@v0.1.1`
+
+### Fixed
+
+- Sweep tick helpers: `ReplayTick.close` as `str` (realistic CSV replay) — pairs with backtest `MockBroker` float coercion fix
+
+[0.1.1]: https://github.com/timhwchuang/trading-app/releases/tag/v0.1.1
+
 ## [0.1.0] - 2026-06-16
 
 First public release as **reference integrator app** (renamed from internal `theman`).

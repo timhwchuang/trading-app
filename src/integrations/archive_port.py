@@ -36,6 +36,4 @@ class TradingAppArchivePort:
         )
 
 
-ThemanArchivePort = TradingAppArchivePort
-
-__all__ = ["ThemanArchivePort", "TradingAppArchivePort"]
+__all__ = ["TradingAppArchivePort"]

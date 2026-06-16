@@ -1,31 +1,25 @@
-"""Test tick fixtures compatible with trading-backtest MockBroker (numeric close)."""
+"""Test tick fixtures — str close matches tick_cache CSV / Shioaji replay."""
 
 from __future__ import annotations
 
 import datetime
-from types import SimpleNamespace
+
+from storage.tick_loader import ReplayTick
 
 
 def make_replay_tick(
     dt: datetime.datetime,
     *,
-    close: float = 18000.0,
+    close: str = "18000",
     volume: int = 1,
     tick_type: int = 1,
-) -> SimpleNamespace:
-    return SimpleNamespace(
-        datetime=dt,
-        close=float(close),
-        volume=volume,
-        tick_type=tick_type,
-        bid_price=0.0,
-        ask_price=0.0,
-    )
+) -> ReplayTick:
+    return ReplayTick(dt, close, volume, tick_type)
 
 
 def session_ticks(
     day: datetime.date | None = None,
-) -> list[SimpleNamespace]:
+) -> list[ReplayTick]:
     base_day = day or datetime.date(2026, 6, 12)
     base = datetime.datetime.combine(base_day, datetime.time(9, 0, 0))
     return [

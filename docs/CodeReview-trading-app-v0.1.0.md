@@ -16,7 +16,7 @@ _None._
 
 ## Medium severity
 
-1. **Local folder still `theman/`** — GitHub repo name is `trading-app`; rename blocked by file lock on Windows. Documented in `docs/three-repo/README.md`. Rename before or immediately after first push.
+1. ~~**Local folder still `theman/`**~~ — **Resolved** (renamed to `trading-app/`; pushed to GitHub).
 
 2. **strategy-vwap-momentum `trend_dir` fix** — Patched locally in monorepo (`strategy.py` `_try_pullback_entry`). Published git tag `v0.1.0` may still lack fix until `v0.1.1` tag. trading-app CI installs from git tag — verify tag includes fix or bump pin.
 
@@ -45,4 +45,4 @@ Proceed with `v0.1.0` after:
 
 1. Push `strategy-vwap-momentum` patch as `v0.1.1` (or cherry-pick into existing tag before push)
 2. Rename local directory `theman` → `trading-app` when IDE releases lock
-3. `git push origin main && git push origin v0.1.0`
+3. ~~`git push origin main && git push origin v0.1.0`~~ — **Done** (2026-06-16).

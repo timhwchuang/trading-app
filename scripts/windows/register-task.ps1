@@ -1,14 +1,14 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$ProjectRoot,
-    [string]$TaskName = "theman-vwap"
+    [string]$TaskName = "trading-app-vwap"
 )
 
 $ErrorActionPreference = "Stop"
-$startScript = Join-Path $ProjectRoot "scripts\windows\start-theman.ps1"
+$startScript = Join-Path $ProjectRoot "scripts\windows\start-trading-app.ps1"
 
 if (-not (Test-Path $startScript)) {
-    throw "找不到 start-theman.ps1: $startScript"
+    throw "找不到 start-trading-app.ps1: $startScript"
 }
 
 $action = New-ScheduledTaskAction -Execute "powershell.exe" `

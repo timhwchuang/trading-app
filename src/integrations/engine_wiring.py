@@ -85,13 +85,9 @@ def trading_app_engine_ports(
     return ports
 
 
-# Deprecated alias — remove after one release cycle.
-theman_engine_ports = trading_app_engine_ports
-
 __all__ = [
     "default_strategy",
     "load_named_strategy",
     "order_adapter_for",
-    "theman_engine_ports",
     "trading_app_engine_ports",
 ]

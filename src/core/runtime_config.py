@@ -40,9 +40,6 @@ class TradingAppRuntimeConfig(EngineRuntimeConfig):
         return _config_module.KBARS_ARCHIVE
 
 
-ThemanRuntimeConfig = TradingAppRuntimeConfig
-
-
 def default_runtime_config() -> TradingAppRuntimeConfig:
     load_config()
     return TradingAppRuntimeConfig(_to_engine_settings())
@@ -52,7 +49,6 @@ __all__ = [
     "RuntimeConfig",
     "RuntimeConfigBase",
     "SWEEP_FIELD_TO_CONST",
-    "ThemanRuntimeConfig",
     "TradingAppRuntimeConfig",
     "default_runtime_config",
     "normalize_overlay_key",
