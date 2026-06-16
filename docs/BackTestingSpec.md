@@ -19,9 +19,9 @@
 
 ## 既有可用介面（實作前必讀，不要重寫這些）
 
-`man.py:VWAPMomentumStrategy` 已具備：
+`runtime.TradingEngine` 已具備：
 
-* 建構子：`VWAPMomentumStrategy(api=None, clock=None)`。
+* 建構子：`TradingEngine(api=None, clock=None, strategy=None)`。
 * `on_tick(tick)`：`tick` 只需具備 `.datetime`(datetime, 台北 naive)、`.close`(str)、
   `.volume`(int)、`.tick_type`(int)。`data_loader.ReplayTick` 已符合。
 * `place_order(signal)`：內部建 `sj.FuturesOrder(..., account=self.api.futopt_account)`，
@@ -65,7 +65,7 @@ class BacktestEngine:
     def __init__(self, code: str, dates: list[datetime.date], cache_dir=...):
         self.clock = VirtualClock()
         self.broker = MockBroker(clock=self.clock, cache_dir=cache_dir)
-        self.strategy = VWAPMomentumStrategy(api=self.broker, clock=self.clock)
+        self.strategy = TradingEngine(api=self.broker, clock=self.clock)
         self.strategy.contract = self.broker.resolve_contract(code)
         # 7.1：阻擋 on_tick 內的背景 thread ATR；改由 run() 同步刷新
         self.strategy._maybe_refresh_atr = _noop_maybe_refresh_atr

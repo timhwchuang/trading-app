@@ -7,7 +7,7 @@ from typing import List
 
 from config import ATR_REFRESH_SEC, SESSION_END, SESSION_START
 from exchange_time import is_trading_session
-from runtime.engine import VWAPMomentumStrategy
+from runtime.engine import TradingEngine
 from strategy.base import Strategy
 from backtest.mock_broker import MockBroker
 from storage.tick_loader import DEFAULT_CACHE_DIR
@@ -29,11 +29,11 @@ def _noop_maybe_refresh_atr(_ts: int) -> None:
     return
 
 
-def _pre_tick_refresh_atr(strategy: VWAPMomentumStrategy, ts: int) -> None:
+def _pre_tick_refresh_atr(host: TradingEngine, ts: int) -> None:
     """Run ATR refresh synchronously before on_tick (avoids lock re-entry deadlock)."""
-    if ts - strategy.last_atr_refresh >= ATR_REFRESH_SEC:
-        strategy.last_atr_refresh = ts
-        strategy.refresh_atr()
+    if ts - host.last_atr_refresh >= ATR_REFRESH_SEC:
+        host.last_atr_refresh = ts
+        host.refresh_atr()
 
 
 class BacktestEngine:
@@ -49,7 +49,7 @@ class BacktestEngine:
         """
         self.clock = VirtualClock()
         self.broker = MockBroker(clock=self.clock, cache_dir=cache_dir)
-        self.strategy = VWAPMomentumStrategy(
+        self.strategy = TradingEngine(
             api=self.broker, clock=self.clock, strategy=strategy
         )
         self.strategy.contract = self.broker.resolve_contract(code)

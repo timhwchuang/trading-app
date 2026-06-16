@@ -23,13 +23,14 @@
 
 ## 1. 核心哲學：實盤 / 回測「同構性」與「確定性」
 
-* **核心決策邏輯一字不改**：`VWAPMomentumStrategy` 的 `process_strategy` /
-  `manage_exit` / `update_vwap` / `update_momentum` / `_handle_futures_deal`
+* **核心決策邏輯一字不改**：`strategy.vwap_momentum.VWAPMomentumStrategy` 的 `evaluate` /
+  `manage_exit` 與 `runtime.TradingEngine` 的 `process_strategy` /
+  `update_vwap` / `update_momentum` / `_handle_futures_deal`
   在實盤與回測共用同一份程式碼。回測只替換「外部依賴」，不替換決策。
 * **外部依賴注入（已落地的縫）**：
-  * `api`：建構子 `VWAPMomentumStrategy(api=...)` 已支援注入（實盤為 `sj.Shioaji`，
+  * `api`：建構子 `TradingEngine(api=...)` 已支援注入（實盤為 `sj.Shioaji`，
     回測為 `MockBroker`）。
-  * `clock`：建構子 `VWAPMomentumStrategy(clock=...)` 已支援注入。實盤預設
+  * `clock`：建構子 `TradingEngine(clock=...)` 已支援注入。實盤預設
     `time.time()`；回測傳入「tick 時間驅動的時鐘」，使 pending 超時、看門狗等
     背景判斷在回測中**確定性可重現**。
   * `_today()`：ATR 的「今天」優先取最後一筆 tick 的交易所日期，無 tick 時才退回

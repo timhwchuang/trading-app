@@ -21,7 +21,7 @@ from sweep.determinism_check import (
     run_hash,
 )
 from core.types import OrderSignal
-from runtime.engine import VWAPMomentumStrategy
+from runtime.engine import TradingEngine
 from reporting.uat_report import compute_metrics
 
 
@@ -110,10 +110,10 @@ class TestDeterminism(unittest.TestCase):
             cache_dir = Path(tmp)
             with patch("backtest.replay.iter_replay_ticks", fake_replay):
                 with patch.object(
-                    VWAPMomentumStrategy,
+                    TradingEngine,
                     "process_strategy",
                     _patched_entry_process(
-                        VWAPMomentumStrategy.process_strategy
+                        TradingEngine.process_strategy
                     ),
                 ):
                     captured = capture_backtest_log_lines(
@@ -134,7 +134,7 @@ class TestDeterminism(unittest.TestCase):
         def fake_replay(_code, _dates, cache_dir=None):
             yield from ticks
 
-        original_emit = VWAPMomentumStrategy._emit_daily_summary
+        original_emit = TradingEngine._emit_daily_summary
 
         def emit_with_bonus(self, trade_date):
             original_emit(self, trade_date)
@@ -148,7 +148,7 @@ class TestDeterminism(unittest.TestCase):
             with patch("backtest.replay.iter_replay_ticks", fake_replay):
                 base_hash = run_hash("TXFR1", [date], cache_dir=cache_dir)
                 with patch.object(
-                    VWAPMomentumStrategy, "_emit_daily_summary", emit_with_bonus
+                    TradingEngine, "_emit_daily_summary", emit_with_bonus
                 ):
                     mutated_hash = run_hash("TXFR1", [date], cache_dir=cache_dir)
         self.assertNotEqual(base_hash, mutated_hash)
@@ -204,10 +204,10 @@ class TestDeterminism(unittest.TestCase):
             _seed_kbars_cache(cache_dir)
             with patch("backtest.replay.iter_replay_ticks", fake_replay):
                 with patch.object(
-                    VWAPMomentumStrategy,
+                    TradingEngine,
                     "process_strategy",
                     _patched_entry_when_atr_ready(
-                        VWAPMomentumStrategy.process_strategy
+                        TradingEngine.process_strategy
                     ),
                 ):
                     hashes = [
@@ -241,10 +241,10 @@ class TestDeterminism(unittest.TestCase):
             _seed_kbars_cache(cache_dir)
             with patch("backtest.replay.iter_replay_ticks", fake_replay):
                 with patch.object(
-                    VWAPMomentumStrategy,
+                    TradingEngine,
                     "process_strategy",
                     _patched_entry_when_atr_ready(
-                        VWAPMomentumStrategy.process_strategy
+                        TradingEngine.process_strategy
                     ),
                 ):
                     hashes = [

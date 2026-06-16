@@ -89,7 +89,10 @@ class TestStrategyPhase6(unittest.TestCase):
 
 # --- Interface injection test (new for pluggable strategies) ---
 
+import datetime
+
 from strategy.base import BaseStrategy, StrategySideEffects
+from storage.tick_loader import ReplayTick
 from unittest.mock import MagicMock
 
 
@@ -118,6 +121,20 @@ class TestStrategyInterfaceInjection(unittest.TestCase):
         host = TradingEngine(api=MagicMock(), strategy=dummy)
 
         self.assertIs(host.strategy, dummy)
+
+    @unittest.expectedFailure
+    def test_custom_strategy_survives_one_tick(self):
+        """Host still requires VWAP-specific API; fails until Phase 7 widens Protocol."""
+        from runtime.engine import TradingEngine
+
+        dummy = _DummyStrategy()
+        host = TradingEngine(api=MagicMock(), strategy=dummy)
+        host._api_connected = True
+        host._order_sync_mode = True
+        tick = ReplayTick(
+            datetime.datetime(2026, 6, 12, 9, 0, 0), "18000", 1, 1
+        )
+        host.on_tick(tick)
 
 
 if __name__ == "__main__":

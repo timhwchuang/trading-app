@@ -5,7 +5,7 @@
 * 落地成本地 CSV 快取（純 stdlib，不依賴 pandas/pyarrow），回測一律讀快取。
 * 配額感知：抓取前後記錄 ``api.usage()``，剩餘 < 10% 告警。
 * 提供 ``ReplayTick`` 與線上 ``TickFOPv1`` 同構的屬性（datetime/close/volume/tick_type），
-  讓回測重放可直接餵進 ``VWAPMomentumStrategy.on_tick``。
+  讓回測重放可直接餵進 ``TradingEngine.on_tick``。
 
 Shioaji 歷史資料限制（務必知悉）：
 * 只有「最佳一檔」買賣價，沒有歷史 order book 深度，無排隊位置。

@@ -8,19 +8,17 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from runtime.engine import VWAPMomentumStrategy
+from runtime.engine import TradingEngine
 from strategy.base import Strategy
 
 
-def make_strategy(strategy: Strategy | None = None) -> VWAPMomentumStrategy:
-    """Create a TradingEngine (aliased as VWAPMomentumStrategy for back-compat)
-    with a mock API. Pass a custom `strategy` to use a different decision impl.
-    """
-    return VWAPMomentumStrategy(api=MagicMock(), strategy=strategy)
+def make_strategy(strategy: Strategy | None = None) -> TradingEngine:
+    """Create a TradingEngine with a mock API. Pass a custom `strategy` for decision logic."""
+    return TradingEngine(api=MagicMock(), strategy=strategy)
 
 
 def arm_pending_entry(
-    strategy: VWAPMomentumStrategy,
+    strategy: TradingEngine,
     *,
     order_id: str = "ord-entry-1",
     signal_price: float = 18000.0,
@@ -37,7 +35,7 @@ def arm_pending_entry(
 
 
 def arm_pending_exit(
-    strategy: VWAPMomentumStrategy,
+    strategy: TradingEngine,
     *,
     order_id: str = "ord-exit-1",
     signal_price: float = 18020.0,

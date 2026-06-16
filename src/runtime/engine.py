@@ -764,6 +764,3 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
             self.api.logout()
             shutdown_async_logging()
 
-
-VWAPMomentumStrategy = TradingEngine
-

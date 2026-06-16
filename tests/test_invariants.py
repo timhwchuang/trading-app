@@ -90,10 +90,10 @@ class TestAtrKlineStart(unittest.TestCase):
     def test_long_lookback_when_atr_zero(self):
         import datetime
 
-        from runtime.engine import VWAPMomentumStrategy
+        from runtime.engine import TradingEngine
 
         today = datetime.date(2026, 6, 10)
-        start, used_long = VWAPMomentumStrategy._atr_kline_start(
+        start, used_long = TradingEngine._atr_kline_start(
             today,
             current_atr=0.0,
             long_lookback_days=10,
@@ -105,10 +105,10 @@ class TestAtrKlineStart(unittest.TestCase):
     def test_intraday_when_atr_ready(self):
         import datetime
 
-        from runtime.engine import VWAPMomentumStrategy
+        from runtime.engine import TradingEngine
 
         today = datetime.date(2026, 6, 10)
-        start, used_long = VWAPMomentumStrategy._atr_kline_start(
+        start, used_long = TradingEngine._atr_kline_start(
             today,
             current_atr=30.0,
             long_lookback_days=10,

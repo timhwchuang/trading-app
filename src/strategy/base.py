@@ -9,8 +9,12 @@ Design goals (per open-source refinement):
 - Any strategy that satisfies this interface can be injected into either.
 - Strategies feel like plugins: implement the contract (or subclass BaseStrategy) and pass the instance in.
 
-The existing VWAP momentum logic already produces the right shape via its .evaluate() method
-and supporting state machine. We formalize it here without changing its behavior.
+**Transition status (not yet fully pluggable):**
+The Protocol formalizes the `evaluate()` call site, but the host still reaches into
+VWAP-specific surfaces on `self.strategy` (e.g. `.momentum`, `reset_momentum()`,
+`manage_exit()`, audit builders). Only `strategy.vwap_momentum.VWAPMomentumStrategy`
+can run end-to-end today. New strategies injected via the constructor will fail on the
+first tick until those host dependencies are widened or removed. See TODO Phase 7.
 """
 
 from __future__ import annotations
@@ -24,7 +28,7 @@ from core.types import MarketSnapshot, OrderSignal, PositionSnapshot, RiskGate, 
 
 
 class Strategy(Protocol):
-    """Pluggable strategy decision contract.
+    """Pluggable strategy decision contract (transition — see module docstring).
 
     The host (engine/backtester) is responsible for:
     - Computing MarketSnapshot (via indicators)
@@ -70,19 +74,16 @@ class Strategy(Protocol):
     def reset(self) -> None:
         """Reset any internal episode / momentum state.
 
-        Called by the host after a fill (entry or exit) and on position resync
-        in some paths. Implementations that maintain intra-trade state must
-        implement this.
+        Declared on the Protocol but not yet called by the host (host uses
+        ``reset_momentum()`` on the VWAP implementation instead). Reserved for
+        a future unified reset hook.
         """
         ...
 
     # ------------------------------------------------------------------
     # Momentum-related hooks (present on the current VWAP implementation).
-    # The host (engine) currently delegates to these for property exposure
-    # and on_tick peak updates. They are optional for new strategies.
-    # During the transition we keep the delegation on TradingEngine for
-    # backward compatibility with tests and existing call sites.
-    # New strategies can implement them as no-ops.
+    # The host currently delegates to these and reads ``.momentum`` directly.
+    # They are NOT sufficient for a new strategy: see module docstring.
     # ------------------------------------------------------------------
 
     def activate_momentum(self, direction: str, price: float, ts: int) -> None:

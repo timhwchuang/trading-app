@@ -17,7 +17,7 @@ from sweep.param_sweep import (
     _run_backtest_summaries,
     sweep,
 )
-from runtime.engine import VWAPMomentumStrategy
+from runtime.engine import TradingEngine
 
 
 class TestParamSweep(unittest.TestCase):
@@ -87,7 +87,7 @@ class TestParamSweep(unittest.TestCase):
         original = config.ENTRY_BAND_POINTS
         saved = _apply_params({"ENTRY_BAND_POINTS": 7.5})
         try:
-            strategy = VWAPMomentumStrategy(api=MagicMock())
+            strategy = TradingEngine(api=MagicMock())
             strategy._api_connected = True
             strategy.current_vwap = 18000.0
             strategy.vol_1s = 1
