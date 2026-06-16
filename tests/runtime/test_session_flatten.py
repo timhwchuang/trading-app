@@ -11,7 +11,7 @@ from config import (
     SESSION_FORCE_FLATTEN_TIME,
 )
 from exchange_time import is_at_or_after
-from test_helpers import make_host
+from tests.test_helpers import make_host
 
 
 def _dt(hour: int, minute: int, second: int = 0) -> datetime.datetime:

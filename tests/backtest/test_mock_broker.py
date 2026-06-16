@@ -13,7 +13,7 @@ from config import MOMENTUM_VOL_1S
 from storage.kbar_loader import KBarRecord, save_kbars_csv
 from storage.tick_loader import ReplayTick
 from backtest.mock_broker import MockBroker
-from test_helpers import make_host
+from tests.test_helpers import make_host
 
 
 def _make_buy_order(limit: float) -> sj.FuturesOrder:

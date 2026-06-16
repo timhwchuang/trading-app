@@ -108,13 +108,13 @@ class BacktestEngine:
 * 引擎結束時，最後一日的 DAILY_SUMMARY 由 `run()` 末端補發（見 2.2）。
 
 ### 2.4 驗收條件（Phase 2）
-* `test_backtester.py::test_engine_runs_empty`：無快取時 `run()` 不丟例外。
-* `test_backtester.py::test_clock_advances`：餵 2 筆人工 tick，`clock()` 等於最後一筆
+* `tests/backtest/test_backtester.py::test_engine_runs_empty`：無快取時 `run()` 不丟例外。
+* `tests/backtest/test_backtester.py::test_clock_advances`：餵 2 筆人工 tick，`clock()` 等於最後一筆
   `tick.datetime.timestamp()`。
-* `test_backtester.py::test_pending_timeout_before_tick_processing`（6.3）：跨 tick 超時後，
+* `tests/backtest/test_backtester.py::test_pending_timeout_before_tick_processing`（6.3）：跨 tick 超時後，
   進入 `on_tick` 前 `is_pending` 已為 False。
-* `test_backtester.py::test_premarket_ticks_are_filtered`（6.4）：08:45 前 tick 不進 `on_tick`。
-* `test_backtester.py::test_premarket_tick_still_runs_matching`（7.3）：盤前 tick 仍撮合
+* `tests/backtest/test_backtester.py::test_premarket_ticks_are_filtered`（6.4）：08:45 前 tick 不進 `on_tick`。
+* `tests/backtest/test_backtester.py::test_premarket_tick_still_runs_matching`（7.3）：盤前 tick 仍撮合
   in-flight 單。
 
 ---
@@ -212,7 +212,7 @@ def place_order(self, contract, order, timeout=0):
 
 ### 3.6 驗收條件（Phase 3）— 具體測試案例與預期值
 
-`test_mock_broker.py`：
+`tests/backtest/test_mock_broker.py`：
 
 1. `test_buy_fill_normal_slip`：limit=18003，餵 tick close=18000 vol=1，延遲後撮合 →
    產生 FuturesDeal，fill_price = `min(18000,18003)+0.5 = 18000.5`。
@@ -256,15 +256,15 @@ def normalize_audit_for_hash(label: str, json_part: str) -> str:
 * JSON 內決策欄位已 round（`observability`），故跨平台穩定。
 
 ### 4.2 驗收條件（Phase 4）
-1. `test_determinism.py::test_three_runs_same_hash`：同資料連跑 3 次 hash 一致（無交易退化案例）。
-2. `test_determinism.py::test_three_runs_same_hash_with_kbars_and_fills`（7.6）：**有真 K 線
+1. `tests/sweep/test_determinism.py::test_three_runs_same_hash`：同資料連跑 3 次 hash 一致（無交易退化案例）。
+2. `tests/sweep/test_determinism.py::test_three_runs_same_hash_with_kbars_and_fills`（7.6）：**有真 K 線
    且產生 FILL** 時，連跑 3 次 hash 仍一致——確定性閘門的真正驗收。
-3. `test_determinism.py::test_uat_report_parses_backtest_log`：`fill_count > 0` 且
+3. `tests/sweep/test_determinism.py::test_uat_report_parses_backtest_log`：`fill_count > 0` 且
    `momentum_to_entry_conversion` 不為 None。
-4. `test_determinism.py::test_daily_summary_in_hash`（6.2）：修改 DAILY_SUMMARY 決策欄位
+4. `tests/sweep/test_determinism.py::test_daily_summary_in_hash`（6.2）：修改 DAILY_SUMMARY 決策欄位
    後 hash 必須改變。
-5. `test_determinism.py::test_hash_robust_to_key_order`（6.8）：key 順序打亂後 hash 不變。
-6. `test_determinism.py::test_hash_ignores_operational_wall_clock`（7.5）：僅
+5. `tests/sweep/test_determinism.py::test_hash_robust_to_key_order`（6.8）：key 順序打亂後 hash 不變。
+6. `tests/sweep/test_determinism.py::test_hash_ignores_operational_wall_clock`（7.5）：僅
    `lock_wait_max_ms` 不同時 hash 不變。
 7. 人工核對：回測 log 跑 `python src/uat_report.py <log>`，指標語意與實盤一致。
 
@@ -295,12 +295,12 @@ def sweep(grid: dict[str, list], dates_train, dates_valid, code, cache_dir) -> l
 `exit_grace_ticks: [40, 60, 90]`、`exhaustion_vol: [15, 25]`。
 
 ### 5.3 驗收條件（Phase 5）
-1. `test_param_sweep.py::test_sweep_small_grid`：2×2 grid，回傳 4 列，每列含
+1. `tests/sweep/test_param_sweep.py::test_sweep_small_grid`：2×2 grid，回傳 4 列，每列含
    `params/train_kpi/valid_kpi`，且依 `valid_score` 排序。
-2. `test_param_sweep.py::test_config_restored`：sweep 後 `man.*`、`config.*`、
+2. `tests/sweep/test_param_sweep.py::test_config_restored`：sweep 後 `man.*`、`config.*`、
    `observability.*` 皆還原。
-3. `test_param_sweep.py::test_man_namespace_patched`（6.6）：`process_strategy` 讀到掃描值。
-4. `test_param_sweep.py::test_daily_summary_params_match_sweep`（7.7）：sweep 期間
+3. `tests/sweep/test_param_sweep.py::test_man_namespace_patched`（6.6）：`process_strategy` 讀到掃描值。
+4. `tests/sweep/test_param_sweep.py::test_daily_summary_params_match_sweep`（7.7）：sweep 期間
    `DAILY_SUMMARY.params` 與掃描值一致。
 
 ### 5.4 KPI 聚合（7.8）
@@ -335,7 +335,7 @@ else:
 > 語意註記：clamp 至 limit 等同「假設於 limit 成交」，屬樂觀處理（真實穿價多為直接
 > 不成交→cancel），但優於現況產生不合法的劣於 limit 成交價。
 
-**驗收**：`test_mock_broker.py::test_fill_never_worse_than_limit`
+**驗收**：`tests/backtest/test_mock_broker.py::test_fill_never_worse_than_limit`
 * Buy：任何 `slippage` 下，`fill <= limit`。
 * Sell：任何 `slippage` 下，`fill >= limit`。
 * 具體：buy limit=18003、close=18000、slip=8 → `fill == 18003`（被 clamp，非 18008）。
@@ -354,7 +354,7 @@ else:
 * `params` 快照於 sweep 時須同步 patch `observability`（7.7），連跑下穩定。
 
 **驗收**：
-* `test_determinism.py::test_daily_summary_in_hash`：修改任一 DAILY_SUMMARY 欄位值後，
+* `tests/sweep/test_determinism.py::test_daily_summary_in_hash`：修改任一 DAILY_SUMMARY 欄位值後，
   `run_hash()` 結果**必須改變**。
 * 既有 `test_three_runs_same_hash` 仍須全綠（同資料連跑 3 次一致）。
 
@@ -367,7 +367,7 @@ else:
 `撮合 → timeout → (session) 同步 ATR → on_tick`。其中 **timeout 仍先於 `on_tick`**，
 滿足「進決策前 pending 已刷新」；**撮合先於 timeout**（7.2）避免冷清間隔誤殺成交。
 
-**驗收**：`test_backtester.py::test_pending_timeout_before_tick_processing`
+**驗收**：`tests/backtest/test_backtester.py::test_pending_timeout_before_tick_processing`
 * 09:00:00 下單後，下一筆 tick 在 09:00:10（> `PENDING_TIMEOUT_SEC`）抵達時，
   進入 `on_tick` 前 `is_pending` 已為 False。
 
@@ -390,7 +390,7 @@ if is_trading_session(tick.datetime, SESSION_START, SESSION_END):
     self.host.on_tick(tick)
 ```
 
-**驗收**：`test_backtester.py::test_premarket_ticks_are_filtered`
+**驗收**：`tests/backtest/test_backtester.py::test_premarket_ticks_are_filtered`
 * 08:45 前的 tick 不得進入 `on_tick`（VWAP/動量不被污染）。
 * `test_premarket_tick_still_runs_matching`（7.3）：盤前 tick 仍處理 in-flight 撮合。
 
@@ -403,7 +403,7 @@ if is_trading_session(tick.datetime, SESSION_START, SESSION_END):
 N 根 K 線（N ≥ ATR 週期），確保 08:45 第一筆 tick 即可算 ATR。預載 bar 的 `ts` 天然
 < 當日 08:45，不破壞 no-look-ahead（3.4）。
 
-**驗收**：`test_mock_broker.py::test_atr_available_on_first_tick`
+**驗收**：`tests/backtest/test_mock_broker.py::test_atr_available_on_first_tick`
 * kbars 快取含前一日/夜盤 bar 時，08:45 首筆 tick 觸發 `refresh_atr` 後
   `current_atr > 0`。
 
@@ -446,7 +446,7 @@ if half_spread is not None:
 * bid/ask 校準路徑須以開關控制（預設關），且**排除於確定性 hash 輸入之外**，標注
   「非確定性核心」。
 
-**驗收**：`test_mock_broker.py::test_spread_calibration_optional`
+**驗收**：`tests/backtest/test_mock_broker.py::test_spread_calibration_optional`
 * 開關開、tick 有 bid/ask 且 spread > 2*NORMAL_SLIP → 實際 slippage 提升至 half-spread。
 * 開關關（預設）→ 撮合結果與 6.1 完全一致（確定性不受影響）。
 
@@ -469,7 +469,7 @@ if half_spread is not None:
 * **B（選配）**：若要生產 log 本身即 canonical，則在 `observability.py` line 61、420
   的 `json.dumps` 加 `sort_keys=True`（會改動 log bytes，uat_report 解析不受影響）。
 
-**驗收**：`test_determinism.py::test_hash_robust_to_key_order`
+**驗收**：`tests/sweep/test_determinism.py::test_hash_robust_to_key_order`
 * 將某行 audit 的 key 順序人工打亂後，正規化 hash **不變**（驗證 A 路徑生效）。
 
 ---
@@ -540,7 +540,7 @@ if half_spread is not None:
 
 ## 總驗收清單（Definition of Done）
 
-* [x] 每個 Phase 的 `tests/test_*.py` 全部通過；`python run_tests.py` 全綠（**139** 項）。
+* [x] 每個 Phase 的 `tests/**/test_*.py` 全部通過；`python run_tests.py` 全綠（**139** 項）。
 * [x] 回測 log 能直接被 `uat_report.py` 解析，指標語意與實盤一致。
 * [x] 同資料連跑 3 次 SHA-256 一致（含**有 K 線 + 有 FILL** 路徑，7.6）。
 * [x] 決策邏輯在 `src/strategy/`（回測僅注入 `_maybe_refresh_atr` no-op）。
@@ -553,12 +553,12 @@ if half_spread is not None:
 
 | Phase | 狀態 | 主要檔案 |
 |-------|------|----------|
-| 2 | ✅ | `backtest/engine.py`, `tests/test_backtester.py` |
-| 3 | ✅ | `backtest/mock_broker.py`, `tests/test_mock_broker.py`, `storage/kbar_loader.py` |
-| 4 | ✅ | `sweep/determinism_check.py`, `tests/test_determinism.py` |
-| 5 | ✅ | `sweep/param_sweep.py`, `tests/test_param_sweep.py` |
+| 2 | ✅ | `backtest/engine.py`, `tests/backtest/test_backtester.py` |
+| 3 | ✅ | `backtest/mock_broker.py`, `tests/backtest/test_mock_broker.py`, `storage/kbar_loader.py` |
+| 4 | ✅ | `sweep/determinism_check.py`, `tests/sweep/test_determinism.py` |
+| 5 | ✅ | `sweep/param_sweep.py`, `tests/sweep/test_param_sweep.py` |
 | 6 | ✅ | 穿價/timeout/試撮/hash/ATR熱身/bid-ask校準/StrategyParams sweep |
-| 7 | ✅ | `strategy/base.py`, `strategy/vwap_momentum.py`, `tests/test_strategy_phase6.py` |
+| 7 | ✅ | `strategy/base.py`, `strategy/vwap_momentum.py`, `tests/strategy/test_strategy_phase6.py` |
 
 ### Phase 7 — Strategy interface（2026-06-16）
 
@@ -567,8 +567,8 @@ if half_spread is not None:
 * **注入**：`TradingEngine(strategy=...)`、`BacktestEngine(..., strategy=...)`。
 * **命名**：執行宿主 = `TradingEngine` / `BacktestEngine.host`；**勿**使用已移除的
   `VWAPMomentumStrategy = TradingEngine` 別名。
-* **測試**：`test_strategy_phase6.py`（constructor 注入 + one-tick survive）；
-  `test_helpers.make_host()` 建立 mock 宿主。
+* **測試**：`tests/strategy/test_strategy_phase6.py`（constructor 注入 + one-tick survive）；
+  `tests.test_helpers.make_host()` 建立 mock 宿主。
 * **驗收**：自訂 `BaseStrategy` 子類注入後，`host.on_tick(tick)` 不拋 `AttributeError`。
 
 分支：`fix/strategy-interface-honesty` → merge 至 `main`。
@@ -577,8 +577,8 @@ if half_spread is not None:
 
 ## 給實作模型的執行順序
 
-1. Phase 3 `MockBroker` + `test_mock_broker.py`
-2. Phase 2 `backtest/engine.py` + `test_backtester.py`（含 7.1 ATR 注入、7.2/7.3 迴圈順序）
+1. Phase 3 `MockBroker` + `tests/backtest/test_mock_broker.py`
+2. Phase 2 `backtest/engine.py` + `tests/backtest/test_backtester.py`（含 7.1 ATR 注入、7.2/7.3 迴圈順序）
 3. 合成或真實 tick/kbar 快取煙霧測試
 4. Phase 4 確定性（含 7.5/7.6）
 5. Phase 5 參數掃描（含 StrategyParams / config patch）
