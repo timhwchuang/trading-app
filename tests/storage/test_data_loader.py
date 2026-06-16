@@ -17,7 +17,7 @@ from storage.tick_loader import (
     load_ticks_csv,
     save_ticks_csv,
 )
-from test_helpers import make_host
+from tests.test_helpers import make_host
 
 
 class TestTaipeiNaive(unittest.TestCase):

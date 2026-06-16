@@ -6,7 +6,7 @@ import datetime
 import unittest
 
 from exchange_time import exchange_date, trading_day_for_daily_reset
-from test_helpers import make_host
+from tests.test_helpers import make_host
 
 
 def _dt(hour: int, minute: int) -> datetime.datetime:

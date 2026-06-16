@@ -9,7 +9,7 @@ from config import EXIT_GRACE_SEC, EXIT_GRACE_TICKS, HARD_STOP_POINTS, VWAP_STOP
 
 class TestExitGracePeriod(unittest.TestCase):
     def _long_strategy(self):
-        from test_helpers import make_host
+        from tests.test_helpers import make_host
 
         host = make_host()
         host.has_position = True
@@ -64,7 +64,7 @@ class TestExitGracePeriod(unittest.TestCase):
         self.assertIsNone(signal)
 
     def test_short_in_grace_vwap_stop_suppressed(self):
-        from test_helpers import make_host
+        from tests.test_helpers import make_host
 
         host = make_host()
         host.has_position = True

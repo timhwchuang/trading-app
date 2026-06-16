@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 from core.types import OrderSignal
 from order_errors import OrderErrorCategory, classify_order_error, should_retry_order
-from test_helpers import arm_pending_exit, make_host
+from tests.test_helpers import arm_pending_exit, make_host
 
 
 class TestOrderErrors(unittest.TestCase):

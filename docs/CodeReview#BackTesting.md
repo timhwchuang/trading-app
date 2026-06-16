@@ -152,7 +152,7 @@ patch、6.8 canonical hash 都有對應實作與測試，純標準庫、無 pand
 - **緩解事實**：排序/選參**不受影響**——`sweep` 是用自己組出的 `params` dict 搭配
   `pnl`/`quick_stop_loss` 做歸因（`param_sweep.py:62-65, 121-128`），不讀 `DAILY_SUMMARY.params`。
   所以是「稽核軌跡誤導」而非「選錯參數」。但 `test_config_restored` 只驗 `man`/`config` 還原
-  （`test_param_sweep.py:49-55`），完全沒測到這個 gap。
+  （`tests/sweep/test_param_sweep.py:49-55`），完全沒測到這個 gap。
 
 **修正建議**
 - `_PATCH_TARGETS` 同步 patch `observability.*`（`setattr(observability, k, v)` 並一併還原），

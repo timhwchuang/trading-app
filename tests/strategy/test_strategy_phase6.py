@@ -107,7 +107,7 @@ class _DummyStrategy(BaseStrategy):
 
 class TestStrategyInterfaceInjection(unittest.TestCase):
     def test_make_strategy_accepts_custom_decision_strategy(self):
-        from test_helpers import make_host
+        from tests.test_helpers import make_host
 
         dummy = _DummyStrategy()
         host = make_host(decision=dummy)

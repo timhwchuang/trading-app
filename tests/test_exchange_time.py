@@ -12,7 +12,7 @@ from exchange_time import (
     is_opening_session_window,
     is_trading_session,
 )
-from test_helpers import make_host
+from tests.test_helpers import make_host
 
 
 def _dt(hour: int, minute: int, second: int = 0) -> datetime.datetime:

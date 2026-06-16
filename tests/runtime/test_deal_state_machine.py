@@ -6,7 +6,7 @@ import unittest
 
 from shioaji import OrderState
 
-from test_helpers import arm_pending_entry, arm_pending_exit, make_host
+from tests.test_helpers import arm_pending_entry, arm_pending_exit, make_host
 
 
 class TestDealStateMachine(unittest.TestCase):
