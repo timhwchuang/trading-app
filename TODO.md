@@ -74,4 +74,5 @@
 | 週報 / 人類 follow-up | `docs/WeeklyStatus.md` |
 | Windows 運維 | `docs/WindowsOps.md` |
 | 架構邊界 | `docs/Architecture.md`, `SPEC.md` |
+| 回測 / sweep 規格 | `docs/SWEEP_SPEC.md` + sibling `docs/BACKTEST_*` / `CALIBRATION.md` |
 | AI 協作規範 | `AGENTS.md` |

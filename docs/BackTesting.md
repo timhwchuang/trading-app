@@ -200,4 +200,4 @@ for tick in storage.tick_loader.iter_replay_ticks(code, dates):
 * [x] **Phase 5**：`sweep/param_sweep.py` + walk-forward 網格。
 * [x] **Phase 7**：`strategy.base.Strategy` + 建構子注入（見 §1.1）。
 
-詳細驗收與邊界案例見 [`BackTestingSpec.md`](BackTestingSpec.md)。
+詳細驗收見四 repo 規格索引 [`BackTestingSpec.md`](BackTestingSpec.md) → `SWEEP_SPEC` / `BACKTEST_*` / `CALIBRATION`。

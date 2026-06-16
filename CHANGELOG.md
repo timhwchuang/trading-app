@@ -8,9 +8,9 @@ Versioning follows [SemVer](https://semver.org/) (0.x = API may still evolve).
 
 ### Changed
 
-- **Docs restructure**: slim `TODO.md` (roadmap only); `UATReminder.md` → `docs/UAT_CHECKLIST.md`; add `docs/DOC_MAP.md`
-- Remove archived CodeReview / Phase8 spec files (history on GitHub)
-- Rename `.cursor/rules` → `trading-app-*.mdc`; remove `start-theman.ps1`
+- **Docs restructure**: slim `TODO.md`; `UAT_CHECKLIST.md`; `DOC_MAP.md`; WeeklyStatus archive → `docs/ARCHIVE/`
+- **BackTestingSpec split**: engine `BACKTEST_HOST_CONTRACT`, backtest `BACKTEST_IMPLEMENTATION`, strategy `CALIBRATION`, app `SWEEP_SPEC`
+- Remove CodeReview / Phase8 spec; rename cursor rules; remove `start-theman.ps1`
 
 ## [0.1.1] - 2026-06-16
 

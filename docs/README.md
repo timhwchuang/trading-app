@@ -14,7 +14,9 @@
 | [`WindowsOps.md`](WindowsOps.md) | 排程、告警、NSSM |
 | [`CALLBACK_GUARDRAILS.md`](CALLBACK_GUARDRAILS.md) | Shioaji callback 守則 |
 | [`BackTesting.md`](BackTesting.md) | 回測哲學（高層） |
-| [`BackTestingSpec.md`](BackTestingSpec.md) | ⚠️ Monolith 時代規格 archive |
+| [`SWEEP_SPEC.md`](SWEEP_SPEC.md) | 確定性 + param sweep（app 層） |
+| [`BackTestingSpec.md`](BackTestingSpec.md) | 索引 stub → 四 repo 規格 |
+| [`ARCHIVE/`](ARCHIVE/) | 歷史週報（非現行真相） |
 | [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) | Tag 前檢查 |
 | [`releases/`](releases/) | 版本說明 |
 

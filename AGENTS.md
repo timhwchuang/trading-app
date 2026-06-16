@@ -79,7 +79,7 @@
   - merge / blocker 狀態變了要立刻改（避免下一位 Agent 照過時週報做事）。
   - 長期提醒區塊（申請 API、tick 累積策略、Live 防護網等）要保持最新。
 - **`docs/` 整個資料夾**（索引見 [`docs/README.md`](docs/README.md)），尤其是：
-  - `BackTestingSpec.md`：回測可執行規格書（Phase 2~7 驗收條件、檔案對照表）。有變更一定要同步這裡。
+  - 回測規格：[`docs/SWEEP_SPEC.md`](docs/SWEEP_SPEC.md) + sibling `BACKTEST_*` / `CALIBRATION.md`（見 [`docs/DOC_MAP.md`](docs/DOC_MAP.md)）。
   - `AuditContract.md`、`UAT_CHECKLIST.md`、`BeforePilot.md`、`WindowsOps.md`、`CALLBACK_GUARDRAILS.md`。
   - Kernel UAT 引用 [trading-engine UAT_CHECKLIST](https://github.com/timhwchuang/trading-engine/blob/main/docs/UAT_CHECKLIST.md)，勿在 app 重寫。
 
@@ -197,7 +197,7 @@ host = make_host(decision=MyStrategy())   # 或直接 TradingEngine(..., strateg
 
 1. 讀 `TODO.md` 目前狀態表 + 對應 Phase。
 2. 讀 `docs/WeeklyStatus.md` **最上方**最新一節（不是只看長期提醒表）。
-3. 讀 `docs/BackTestingSpec.md`（如果涉及回測/驗收）。
+3. 讀回測相關規格（`docs/SWEEP_SPEC.md` + sibling docs；見 `docs/DOC_MAP.md`）。
 4. 跑測試確認基線（見 §10；trading-app **~69** 項）。
 
 ### 6.2 實作完畢必須做的事（Definition of Done）
@@ -207,7 +207,7 @@ host = make_host(decision=MyStrategy())   # 或直接 TradingEngine(..., strateg
 - **更新文件**：
   - `TODO.md` 目前狀態 + 相關 Phase 細節。
   - 新增或更新 `docs/WeeklyStatus.md` 最新一節。
-  - 若改動規格/驗收條件 → 同步 `BackTestingSpec.md`、`AuditContract.md` 等。
+  - 若改動規格/驗收條件 → 同步對應 repo 規格（`SWEEP_SPEC` / `BACKTEST_*` / `CALIBRATION`）、`AuditContract.md` 等。
 - **結構變更**：新增 `src/xxx/` 套件時，同步建立 `tests/xxx/` + `__init__.py`，並更新 `run_tests.py` 內的 maintenance note。
 - **新策略**：在 `strategy/` 下新增檔案，實作 `Strategy` contract，在 `strategy/__init__.py` 暴露，並在 `tests/strategy/` 補測試。
 - **本檔**：架構、gate、已知限制有變時同步更新 `AGENTS.md`。
@@ -293,7 +293,7 @@ Agent 不代操生產機，但改 code / 寫文件時須與下列運維現實一
 - Log：`LOG_FILE` + 每日輪替（P4-2）；結構化審計行見 `AuditContract.md`。
 - Tick：`tick_cache/{code}_{date}.csv` → 收盤後 `python -m storage.compress` → `*.csv.gz`（**預設排除當日**）。
 - Kbars：`KBARS_ARCHIVE=1` → `{code}_kbars_{date}.csv`。
-- **長期運行**：需人類規劃磁碟容量、保留天數、排程壓縮；Agent 改落盤格式時必須更新 `BackTestingSpec.md` 與 replay 相容性說明。
+- **長期運行**：需人類規劃磁碟容量、保留天數、排程壓縮；Agent 改落盤格式時必須更新 `trading-backtest` loader 規格與 replay 相容性說明。
 
 ### 9.4 Kill-switch（營運層，非單一程式碼開關）
 
@@ -353,7 +353,7 @@ python -m storage.compress
 4. `python run_tests.py` 或 `.venv/bin/python run_tests.py`（確認 trading-app 基線全綠）。
 5. 讀 `src/strategy/base.py`（Plugin 契約）。
 6. 讀 `src/runtime/engine.py` 前 150 行 + `src/backtest/engine.py`（host 關係）。
-7. 讀 `docs/BackTestingSpec.md` 的「實作狀態與檔案對照」+ 總驗收清單。
+7. 讀 `docs/DOC_MAP.md` + 各 repo 回測規格索引（`BackTestingSpec.md` stub）。
 8. 看 `tests/test_helpers.py` 的 `make_host`。
 9. 確認 `run_tests.py` 內 maintenance note。
 10. 若任務涉及上線：讀 `BeforePilot.md` + `WindowsOps.md`。
