@@ -11,4 +11,4 @@
 | High-level philosophy | [`BackTesting.md`](BackTesting.md) |
 | File roles | [`DOC_MAP.md`](DOC_MAP.md) |
 
-Full historical text: git history before commit `docs: slim TODO, split BackTestingSpec` (or browse `docs/ARCHIVE/` if exported).
+Full historical text: [`ARCHIVE/BackTestingSpec-2026-06-16.md`](ARCHIVE/BackTestingSpec-2026-06-16.md) (or git history before `485f9c7`).

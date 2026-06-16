@@ -16,16 +16,19 @@
 | [`BackTesting.md`](BackTesting.md) | 回測哲學（高層） |
 | [`SWEEP_SPEC.md`](SWEEP_SPEC.md) | 確定性 + param sweep（app 層） |
 | [`BackTestingSpec.md`](BackTestingSpec.md) | 索引 stub → 四 repo 規格 |
-| [`ARCHIVE/`](ARCHIVE/) | 歷史週報（非現行真相） |
+| [`ARCHIVE/`](ARCHIVE/) | 歷史週報、monolith `BackTestingSpec`（非現行真相） |
 | [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) | Tag 前檢查 |
 | [`releases/`](releases/) | 版本說明 |
 
 ## Kernel / sibling 文件（勿在 app 重寫）
 
-| Repo | UAT / 安全 |
-| ---- | ---------- |
+| Repo | 關鍵規格 |
+| ---- | -------- |
+| [trading-engine BACKTEST_HOST_CONTRACT](https://github.com/timhwchuang/trading-engine/blob/main/docs/BACKTEST_HOST_CONTRACT.md) | 回放宿主 API 契約 |
 | [trading-engine UAT_CHECKLIST](https://github.com/timhwchuang/trading-engine/blob/main/docs/UAT_CHECKLIST.md) | 狀態機、重連、pending、flatten |
 | [trading-engine LIVE_SAFETY](https://github.com/timhwchuang/trading-engine/blob/main/docs/LIVE_SAFETY.md) | 實盤護欄 |
+| [trading-backtest BACKTEST_IMPLEMENTATION](https://github.com/timhwchuang/trading-backtest/blob/main/docs/BACKTEST_IMPLEMENTATION.md) | MockBroker、回放迴圈 |
+| [strategy-vwap-momentum CALIBRATION](https://github.com/timhwchuang/strategy-vwap-momentum/blob/main/docs/CALIBRATION.md) | P6-1 趨勢校準 SOP |
 
 ## 現行架構速查（v0.1.1）
 

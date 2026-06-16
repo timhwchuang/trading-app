@@ -21,7 +21,7 @@ with a documented forward policy (fixed bars or to flatten). Never use synthetic
 
 See:
 - TODO.md P6-1-CAL-2 / CAL-3 / CAL-5 (SOP) + CAL-7/8
-- BackTestingSpec.md "P6-1 Trend Filter Calibration Workflow"
+- strategy-vwap-momentum docs/CALIBRATION.md (P6-1 workflow)
 - src/strategy/trend.py (min_strength semantics, 0.0 = most aggressive)
 - src/observability.py + vwap_momentum.py (record_trend_veto + reason="trend_veto" emission)
 """

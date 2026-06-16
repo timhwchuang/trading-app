@@ -17,7 +17,7 @@
 | **SPEC.md** | 各 repo | 整合者 | 套件邊界、公開 API、依賴方向。 |
 | **docs/SWEEP_SPEC.md** | trading-app | 研究 | 確定性 hash、`param_sweep`、`uat_report` 編排 |
 | **docs/BackTestingSpec.md** | trading-app | stub | 索引 → sibling BACKTEST_* / CALIBRATION / SWEEP_SPEC |
-| **docs/ARCHIVE/** | trading-app | archive | 歷史週報等；**非現行真相** |
+| **docs/ARCHIVE/** | trading-app | archive | 歷史週報、monolith `BackTestingSpec`；**非現行真相** |
 
 ## 重疊釐清（常見混淆）
 
@@ -33,7 +33,7 @@
 
 | Repo | 關鍵文件 |
 | ---- | -------- |
-| [trading-engine](https://github.com/timhwchuang/trading-engine) | `SPEC.md`, `docs/UAT_CHECKLIST.md`, `docs/LIVE_SAFETY.md` |
-| [trading-backtest](https://github.com/timhwchuang/trading-backtest) | `SPEC.md`, `docs/RELEASE_CHECKLIST.md` |
-| [strategy-vwap-momentum](https://github.com/timhwchuang/strategy-vwap-momentum) | `SPEC.md`, `CHANGELOG.md`（策略校準 B 類待 UAT tick） |
+| [trading-engine](https://github.com/timhwchuang/trading-engine) | `SPEC.md`, `docs/BACKTEST_HOST_CONTRACT.md`, `docs/UAT_CHECKLIST.md`, `docs/LIVE_SAFETY.md` |
+| [trading-backtest](https://github.com/timhwchuang/trading-backtest) | `SPEC.md`, `docs/BACKTEST_IMPLEMENTATION.md`, `docs/RELEASE_CHECKLIST.md` |
+| [strategy-vwap-momentum](https://github.com/timhwchuang/strategy-vwap-momentum) | `SPEC.md`, `docs/CALIBRATION.md`, `CHANGELOG.md`（B 類待 UAT tick） |
 | [trading-app](https://github.com/timhwchuang/trading-app) | 本檔、`TODO.md`, `docs/UAT_CHECKLIST.md` |
