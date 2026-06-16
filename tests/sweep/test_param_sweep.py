@@ -51,6 +51,36 @@ class TestParamSweep(unittest.TestCase):
         scores = [r["valid_score"] for r in results]
         self.assertEqual(scores, sorted(scores, reverse=True))
 
+    def test_sweep_with_trend_params_attaches_veto_metrics(self):
+        """P6-1-CAL-3: param_sweep now accepts trend_ keys and attaches veto_metrics via harness."""
+        ticks = [
+            ReplayTick(datetime.datetime(2026, 6, 12, 9, 0, 0), "18000", 1, 1),
+        ]
+
+        def fake_replay(_code, _dates, cache_dir=None):
+            yield from ticks
+
+        grid = {
+            "trend_filter_enabled": [False, True],
+            "trend_min_strength": [0.0, 0.5],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_dir = Path(tmp)
+            with patch("backtest.replay.iter_replay_ticks", fake_replay):
+                results = sweep(
+                    grid,
+                    dates_train=[datetime.date(2026, 6, 12)],
+                    dates_valid=[datetime.date(2026, 6, 13)],
+                    code="TXFR1",
+                    cache_dir=cache_dir,
+                )
+        self.assertEqual(len(results), 4)
+        for row in results:
+            self.assertIn("params", row)
+            # When trend keys present, veto_metrics is attached (synthetic/empty in A-class path)
+            self.assertIn("veto_metrics", row)
+            self.assertIn("veto_rate", row["veto_metrics"])
+
     def test_config_restored(self):
         original_cfg = config.ENTRY_BAND_POINTS
         saved = _apply_params({"ENTRY_BAND_POINTS": 99.0})

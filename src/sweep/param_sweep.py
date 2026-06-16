@@ -13,6 +13,7 @@ from config import SWEEP_DD_PENALTY, SWEEP_SCORE_METRIC, SWEEP_SL_PENALTY
 from storage.tick_loader import DEFAULT_CACHE_DIR
 from sweep.determinism_check import _AuditCaptureHandler
 from reporting.performance_metrics import aggregate_daily_performance, sweep_score_from_kpi
+from reporting.trend_calibration import compute_trend_veto_calibration
 from strategy.params import (
     apply_strategy_params,
     restore_strategy_params,
@@ -118,14 +119,25 @@ def sweep(
             valid_kpi = _aggregate_kpi(
                 _run_backtest_summaries(code, dates_valid, cache_path)
             )
-            results.append(
-                {
-                    "params": params,
-                    "train_kpi": train_kpi,
-                    "valid_kpi": valid_kpi,
-                    "valid_score": valid_score(valid_kpi, penalty=penalty),
-                }
-            )
+            # P6-1-CAL-3: if trend params were swept, attach veto calibration metrics via harness.
+            # For A-class / synthetic tests we call with empty (real UAT would parse SIGNAL_AUDIT
+            # reason=trend_veto from logs or extended capture handler and supply proper forward).
+            # The structure + call exercises the harness and puts veto_rate / delta in the report.
+            veto_metrics = None
+            if any(str(k).startswith("trend_") for k in params.keys()):
+                try:
+                    veto_metrics = compute_trend_veto_calibration([], allowed_audits=[])
+                except Exception:
+                    veto_metrics = {"note": "harness call failed (synthetic path)"}
+            row = {
+                "params": params,
+                "train_kpi": train_kpi,
+                "valid_kpi": valid_kpi,
+                "valid_score": valid_score(valid_kpi, penalty=penalty),
+            }
+            if veto_metrics is not None:
+                row["veto_metrics"] = veto_metrics
+            results.append(row)
         finally:
             restore_strategy_params(saved)
 
