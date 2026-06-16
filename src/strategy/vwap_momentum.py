@@ -6,7 +6,7 @@ import datetime
 import logging
 from typing import Callable, Optional, TYPE_CHECKING
 
-from core.audit.signal_audit import SignalAudit
+from core.audit.signal_audit import SignalAudit, format_signal_audit
 from core.types import (
     MarketSnapshot,
     MomentumState,
@@ -200,6 +200,40 @@ class VWAPMomentumStrategy(BaseStrategy):
             trend_dir=market.trend_dir,
             momentum_dir=self.momentum.direction,
         ):
+            # Vetoed by HTF trend filter. Record for calibration.
+            # Critical: we emit a SIGNAL_AUDIT with reason="trend_veto" so that
+            # uat_report / performance analysis can see the blocked candidates
+            # and (by looking at subsequent price action) judge if the filter
+            # actually improved expectancy. Without this, min_strength cannot
+            # be honestly tuned.
+            if self.obs is not None:
+                self.obs.record_trend_veto()
+
+            direction = self.momentum.direction
+            audit_dir = "Buy" if direction == "Long" else "Sell"
+            buy_ratio = (
+                market.buy_vol_1s / market.vol_1s if market.vol_1s > 0 else 0.0
+            )
+            sell_ratio = (
+                market.sell_vol_1s / market.vol_1s if market.vol_1s > 0 else 0.0
+            )
+            veto_audit = SignalAudit(
+                intent="entry",
+                direction=audit_dir,
+                price=market.price,
+                ts=market.ts,
+                vol_1s=market.vol_1s,
+                buy_ratio=round(buy_ratio, 4),
+                sell_ratio=round(sell_ratio, 4),
+                atr=round(market.current_atr, 2),
+                vwap=round(market.vwap, 1),
+                reason="trend_veto",
+                trend_dir=market.trend_dir,
+                trend_strength=market.trend_strength,
+            )
+            logging.getLogger(__name__).info(
+                "SIGNAL_AUDIT %s", format_signal_audit(veto_audit)
+            )
             return None
 
         if self.obs is not None:

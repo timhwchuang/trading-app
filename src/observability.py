@@ -143,6 +143,7 @@ class DailyObservability:
     atr_max: float | None = None
     daily_pnl: float = 0.0
     consecutive_loss: int = 0
+    trend_vetoes: int = 0
     _entry_fill_ts: int = 0
     _entry_signal_price: float = 0.0
 
@@ -155,6 +156,15 @@ class DailyObservability:
 
     def record_momentum_entry(self) -> None:
         self.near_miss.on_momentum_end(timeout=False)
+
+    def record_trend_veto(self) -> None:
+        """Count a pullback entry that was blocked by the HTF trend filter.
+
+        This is critical for calibrating min_strength / trend_filter_enabled.
+        The actual SIGNAL_AUDIT with reason="trend_veto" is emitted by the
+        strategy at veto time so that uat_report can see forward returns etc.
+        """
+        self.trend_vetoes += 1
 
     def record_pullback_tick(
         self,

@@ -115,11 +115,24 @@ def compute_trend(
     min_strength (Level 2):
         If a direction is detected but |strength| < min_strength, force "Flat", 0.0.
         This makes "Long"/"Short" labels meaningful (only when the HTF move has legs).
-        Strength units:
-          - ema mode: price points of deviation from EMA
+
+        ⚠️ SEMANTICS WARNING (critical for traders):
+          min_strength=0.0 (the default) is the *most aggressive* setting for the
+          filter, not the most permissive.
+          - At 0.0: any detectable HTF drift (even 0.1 point) produces a "Long" or
+            "Short" label → trend_allows_entry will veto the largest number of
+            counter-trend pullbacks.
+          - Raising min_strength makes the filter *looser* (more cases become
+            "Flat" → more entries allowed).
+          When you do `trend_filter_enabled: true` with defaults, you get the
+          strictest veto behavior. Always calibrate and document your intended
+          min_strength.
+
+        Strength units (different per mode — consider ATR normalization later):
+          - ema mode: price points of deviation from the window EMA/displacement
           - slope mode: absolute slope (price change per resampled bar)
-        Default 0.0 preserves old permissive behavior. Typical useful values
-        (after calibration on tick data): 2.0 ~ 8.0 depending on product & TF.
+        Typical useful values (after UAT tick calibration): 3.0 ~ 10.0+ pts
+        depending on product, TF, and mode.
     """
     resampled = resample_closes(closes, timeframe_min)
     if mode == "slope":

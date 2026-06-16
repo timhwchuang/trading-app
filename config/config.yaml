@@ -88,8 +88,11 @@ strategy:
   trend_mode: ema
   trend_ema_period: 20
   trend_slope_min: 0.0
-  # Level 2: only declare Long/Short when |strength| >= this (price points).
-  # 0.0 = fully permissive (original behavior). Calibrate with UAT tick data.
+  # Level 2 min_strength for the trend filter (P6-1).
+  # WARNING: 0.0 is the MOST AGGRESSIVE (strictest) setting — any small HTF
+  # drift becomes a vetoable "trend". Higher values loosen the filter
+  # (more Flat → fewer vetoes). See trend.py docstring for details.
+  # Must be calibrated on UAT tick data before enabling the filter.
   trend_min_strength: 0.0
   atr_trailing_enabled: false
   trail_atr_k: 0.25
