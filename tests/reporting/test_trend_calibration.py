@@ -4,8 +4,12 @@ Covers:
 - veto_rate computation
 - delta_expectancy sign in choppy (near 0 or negative) vs strong counter-trend (positive)
 - edge cases (empty, all veto, zero samples)
-- forward PnL provider injection
+- forward PnL provider injection (correct idx via rec.ts)
 - synthetic scenario builder
+
+SYNTHETIC GUARD: all numbers here are for harness implementation verification only.
+Real delta expectancy / veto_rate used for trend_min_strength calibration or Go/No-Go
+**must** come from B-class UAT tick archive + KBARS + replay forward policy (see CAL-5 SOP).
 
 All data is synthetic per A-class safety boundary. No real tick_cache or UAT logs.
 """
@@ -40,8 +44,8 @@ class TestTrendCalibrationHarness(unittest.TestCase):
         # Simulate a couple "allowed" that also had flat forward
         allowed = [{"price": 100.5, "direction": "Long", "ts": 15}, {"price": 101.0, "direction": "Long", "ts": 35}]
         res = compute_trend_veto_calibration(vetoes, allowed_audits=allowed, get_forward_pnl=fwd)
-        # In pure chop the delta should be small in magnitude
-        self.assertLess(abs(res["delta_expectancy"]), 5.0)
+        # In pure chop the delta should be small in magnitude (now using correct fwd via ts index)
+        self.assertLess(abs(res["delta_expectancy"]), 3.0)
 
     def test_strong_counter_trend_veto_positive_delta(self):
         # Strong adverse move after veto point: allowing would have lost; veto protected => positive delta (saved P&L)

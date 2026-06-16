@@ -15,8 +15,12 @@ It is a hyperparameter for the calibration; document the window used.
 Safety: this module never flips TREND_FILTER_ENABLED, never touches live, never loads real UAT logs
 (unless the caller passes parsed audits). All A-class tests are synthetic.
 
+SYNTHETIC GUARD (CQR-mandated): toy forward / delta numbers are **only** for harness code correctness.
+Real calibration of trend_min_strength / opening the filter requires B-class UAT tick + KBARS replay
+with a documented forward policy (fixed bars or to flatten). Never use synthetic delta for Go/No-Go.
+
 See:
-- TODO.md P6-1-CAL-2 / CAL-3 / CAL-5 (SOP)
+- TODO.md P6-1-CAL-2 / CAL-3 / CAL-5 (SOP) + CAL-7/8
 - BackTestingSpec.md "P6-1 Trend Filter Calibration Workflow"
 - src/strategy/trend.py (min_strength semantics, 0.0 = most aggressive)
 - src/observability.py + vwap_momentum.py (record_trend_veto + reason="trend_veto" emission)
@@ -115,12 +119,20 @@ def compute_trend_veto_calibration(
 
     veto_audits: records with reason="trend_veto" (or all candidates; filter inside).
     allowed_audits: records that passed (no veto). If None, we can only compute stats on vetoed side.
-    get_forward_pnl(price, idx) -> float: signed PnL if entered at that point. If None, uses a
-        trivial last-price or fixed window delta (toy only; real caller supplies replay or log-derived).
+    get_forward_pnl(price, idx) -> float: signed PnL if entered at that point. The caller **must**
+        supply a policy (fixed window, to session flatten, or replay-derived). If None we use a
+        dead 0.0 toy (explicitly not for calibration).
 
     Returns dict with:
       veto_rate, n_veto, n_allowed, mean_forward_if_vetoed, mean_forward_allowed,
       delta_expectancy (allowed - vetoed_if_entered), notes.
+
+    CRITICAL SYNTHETIC GUARD (per CQR + TODO P6-1-CAL):
+    All numbers produced from synthetic scenarios or default toy forward are for harness
+    implementation verification only. Real delta expectancy, veto_rate stability, and any
+    Go/No-Go decision on trend_min_strength or trend_filter_enabled **require** B-class
+    UAT tick archive + KBARS + actual replay forward (CAL-6/7). Window / flatten policy is
+    a hyperparameter that must be documented for each real calibration run.
     """
     veto_list = [_as_veto_record(a) for a in veto_audits]
     # Filter only explicit vetoes if "reason" present on raw
@@ -140,23 +152,27 @@ def compute_trend_veto_calibration(
 
     # Forward on veto side ("if we had entered anyway")
     def _default_fwd(price: float, idx: int) -> float:
-        # Toy: assume later price moves +1% of ATR-ish or fixed; not for real calibration
+        # Explicitly dead toy for safety. Real callers *must* override.
         return 0.0
 
     fwd = get_forward_pnl or _default_fwd
 
     veto_forwards: list[float] = []
-    for i, rec in enumerate(veto_list):
+    for rec in veto_list:
+        # Use rec.ts as original index when provided by synthetic builder (ts set to the veto_at price index).
+        # For real audits, caller must supply a get_forward_pnl that can resolve by rec.ts / rec.price.
+        idx = rec.ts if isinstance(rec.ts, (int, float)) else 0
         try:
-            f = fwd(rec.price, i)
+            f = fwd(rec.price, int(idx))
         except Exception:
             f = 0.0
         veto_forwards.append(f)
 
     allowed_forwards: list[float] = []
-    for i, rec in enumerate(allowed_list):
+    for rec in allowed_list:
+        idx = rec.ts if isinstance(rec.ts, (int, float)) else 0
         try:
-            f = fwd(rec.price, i)
+            f = fwd(rec.price, int(idx))
         except Exception:
             f = 0.0
         allowed_forwards.append(f)
@@ -172,5 +188,5 @@ def compute_trend_veto_calibration(
         "mean_forward_if_vetoed": round(mean_veto, 4),
         "mean_forward_allowed": round(mean_allowed, 4),
         "delta_expectancy": round(delta, 4),
-        "notes": "Synthetic toy forward unless get_forward_pnl supplied. See CAL-2/5 SOP.",
+        "notes": "SYNTHETIC GUARD: toy numbers only. Real delta/veto_rate for Go/No-Go require UAT replay + documented forward policy (CAL-2/5/7).",
     }
