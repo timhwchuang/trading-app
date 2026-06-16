@@ -96,3 +96,73 @@ def compute_vol_threshold(
         mult_normal=mult_normal,
     )
     return effective_base, multiplier, effective_base * multiplier
+
+
+def _ts_ns_to_naive_dt(ts_ns: int) -> datetime.datetime:
+    """Shioaji kbars/ts ns epoch -> naive Taipei local (matches tick.datetime + KBarRecord.ts)."""
+    aware = datetime.datetime.fromtimestamp(ts_ns / 1_000_000_000, TAIWAN_TZ)
+    return aware.replace(tzinfo=None)
+
+
+def select_recent_trading_days_closes(
+    raw_kbars: Any,
+    reference_dt: datetime.datetime,
+    *,
+    max_days: int = 2,
+) -> list[float]:
+    """P6-1-CAL-1: Return 1m closes belonging to the most recent N trading days in the kbars data.
+
+    Uses kbar Datetime (via ts) + trading_day_for_daily_reset to cut cross-session / night / gap pollution
+    that the old approx_bars_per_trading_day=400 heuristic could suffer.
+
+    Accepts:
+    - Shioaji-style raw (has .ts list[int ns] parallel to .Close)
+    - Iterable of objects with .ts (datetime) and .Close (e.g. KBarRecord list)
+
+    Keeps chronological order. "Recent" is by distinct trading_day_for_daily_reset values present,
+    taking the last up to max_days (today's partial bars are included if their trading day matches).
+    This replaces the TXF-magic length slice while still giving the HTF detector ~1-2 days of HTF bars.
+    """
+    # Normalize to parallel lists of (dt, close)
+    pairs: list[tuple[datetime.datetime, float]] = []
+    ts_list = list(getattr(raw_kbars, "ts", []) or [])
+    close_list = list(getattr(raw_kbars, "Close", []) or [])
+    if ts_list and close_list and len(ts_list) == len(close_list):
+        for i in range(len(ts_list)):
+            try:
+                dt = _ts_ns_to_naive_dt(int(ts_list[i]))
+            except Exception:
+                # Fallback: if already datetime-like
+                dt = ts_list[i] if isinstance(ts_list[i], datetime.datetime) else reference_dt
+            pairs.append((dt, float(close_list[i])))
+    else:
+        # Assume sequence of records with .ts (dt) + .Close
+        for rec in raw_kbars or []:
+            ts = getattr(rec, "ts", None)
+            if ts is None:
+                continue
+            dt = ts if isinstance(ts, datetime.datetime) else reference_dt
+            c = getattr(rec, "Close", None)
+            if c is not None:
+                pairs.append((dt, float(c)))
+
+    if not pairs:
+        return []
+
+    # Group by trading day (session-aware)
+    from collections import OrderedDict
+    day_to_closes: OrderedDict[datetime.date, list[float]] = OrderedDict()
+    for dt, c in pairs:
+        day = trading_day_for_daily_reset(dt)
+        day_to_closes.setdefault(day, []).append(c)
+
+    # Most recent days present (by appearance order in data, which is chrono; take tail)
+    days = list(day_to_closes.keys())
+    selected_days = set(days[-max_days:]) if days else set()
+
+    # Reconstruct in original bar order, only selected days
+    out: list[float] = []
+    for dt, c in pairs:
+        if trading_day_for_daily_reset(dt) in selected_days:
+            out.append(c)
+    return out

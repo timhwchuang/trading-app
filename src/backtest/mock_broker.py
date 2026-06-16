@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any, Callable, List, Optional
 
@@ -21,6 +21,7 @@ class _KBars:
     High: List[float]
     Low: List[float]
     Close: List[float]
+    ts: List[datetime.datetime] = field(default_factory=list)  # P6-1-CAL-1: exposed for session-aware day slicing (parallel to Close). Back-compat: old direct constructs without ts get [].
 
 
 class MockBroker:
@@ -86,6 +87,7 @@ class MockBroker:
         highs: List[float] = []
         lows: List[float] = []
         closes: List[float] = []
+        tss: List[datetime.datetime] = []
         for bar in bars:
             if current is not None:
                 if bar.ts > current:
@@ -96,7 +98,8 @@ class MockBroker:
             highs.append(bar.High)
             lows.append(bar.Low)
             closes.append(bar.Close)
-        return _KBars(High=highs, Low=lows, Close=closes)
+            tss.append(bar.ts)
+        return _KBars(High=highs, Low=lows, Close=closes, ts=tss)
 
     def _slippage_for(
         self,

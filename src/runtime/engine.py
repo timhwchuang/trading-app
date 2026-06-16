@@ -415,15 +415,17 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
                 closes = list(getattr(kbars, "Close", []) or [])
                 trend_closes = closes
                 if used_long:
-                    # B (review): when we pulled multi-day kbars for stable ATR (current_atr==0
-                    # or first time today), limit the data fed to trend computation.
-                    # This mitigates the worst cross-session / night-session / gap pollution
-                    # exactly at open, when the filter is most needed and the naive stride
-                    # + last-N resampled would otherwise pull in yesterday's close + jump.
-                    # We still allow ~2 trading days of 1m bars so the HTF detector has
-                    # enough history, but we cut the ancient data that creates fake "trends".
-                    approx_bars_per_trading_day = 400  # TXF ~330-390 1m bars + buffer
-                    trend_closes = closes[-approx_bars_per_trading_day * 2 :]
+                    # P6-1-CAL-1: session-aware cut using kbar ts + trading_day_for_daily_reset.
+                    # Replaces the TXF-specific approx_bars_per_trading_day=400 magic + raw [-N:]
+                    # slice. Keeps the most recent 1-2 trading days' closes (today partial ok).
+                    # This is the Live hygiene requirement (no more cross-night/gap pollution
+                    # into HTF regime at open). The helper lives in exchange_time for reuse
+                    # with both live raw kbars and backtest KBarRecord paths.
+                    from exchange_time import select_recent_trading_days_closes
+
+                    trend_closes = select_recent_trading_days_closes(
+                        kbars, self._last_tick_exchange_dt or datetime.datetime.now()
+                    ) or closes
                 trend_dir, trend_strength = compute_trend(
                     trend_closes,
                     mode=TREND_MODE,

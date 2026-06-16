@@ -115,5 +115,52 @@ class TestDailyStateReset(unittest.TestCase):
         self.assertTrue(host.block_new_entry)
 
 
+class TestP6Cal1RecentTradingDaySlice(unittest.TestCase):
+    """P6-1-CAL-1: direct unit coverage for select_recent_trading_days_closes + trading_day boundaries."""
+
+    def test_select_keeps_only_recent_days_and_includes_latest(self):
+        from exchange_time import select_recent_trading_days_closes, trading_day_for_daily_reset
+        import datetime as dt_mod
+
+        # Two days, 5 bars each (simulated 1m)
+        d1 = dt_mod.datetime(2026, 6, 12, 9, 0)
+        d2 = dt_mod.datetime(2026, 6, 13, 9, 0)
+        day1 = [100.0 + i for i in range(5)]
+        day2 = [110.0 + i for i in range(5)]
+        all_c = day1 + day2
+        all_ts = [int((d1 + dt_mod.timedelta(minutes=i)).timestamp() * 1e9) for i in range(5)] + \
+                 [int((d2 + dt_mod.timedelta(minutes=i)).timestamp() * 1e9) for i in range(5)]
+
+        class R:
+            ts = all_ts
+            Close = all_c
+
+        ref = d2 + dt_mod.timedelta(minutes=3)
+        sliced = select_recent_trading_days_closes(R(), ref, max_days=2)
+        # With 2 days both present and max=2 -> all 10 bars (recent days include both)
+        self.assertEqual(len(sliced), 10)
+        # Force max_days=1 -> only the last distinct trading day (the hygiene cut)
+        sliced1 = select_recent_trading_days_closes(R(), ref, max_days=1)
+        self.assertEqual(sliced1, day2)
+        self.assertEqual(trading_day_for_daily_reset(d2), trading_day_for_daily_reset(ref))
+
+    def test_select_cross_night_gap_and_choppy_prior(self):
+        from exchange_time import select_recent_trading_days_closes
+        import datetime as dt_mod
+        # Prior night/close polluted flat + new day ramp
+        d_prior = dt_mod.datetime(2026, 6, 12, 13, 40)
+        d_new = dt_mod.datetime(2026, 6, 13, 8, 50)
+        prior = [100.0] * 10
+        new = [100.0 + i * 0.7 for i in range(15)]
+        closes = prior + new
+        tss = [int((d_prior + dt_mod.timedelta(minutes=i)).timestamp()*1e9) for i in range(10)] + \
+              [int((d_new + dt_mod.timedelta(minutes=i)).timestamp()*1e9) for i in range(15)]
+        class R2:
+            ts = tss
+            Close = closes
+        sliced = select_recent_trading_days_closes(R2(), d_new + dt_mod.timedelta(minutes=5), max_days=1)
+        self.assertEqual(sliced, new)  # prior day dropped
+
+
 if __name__ == "__main__":
     unittest.main()
