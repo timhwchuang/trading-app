@@ -6,38 +6,23 @@ import datetime
 import tempfile
 import unittest
 from pathlib import Path
-import shioaji as sj
-from shioaji import OrderState
+from types import SimpleNamespace
 
 from config import MOMENTUM_VOL_1S
+from core.order_events import FUTURES_DEAL, FUTURES_ORDER
+from core.types import OrderSignal
 from storage.kbar_loader import KBarRecord, save_kbars_csv
 from storage.tick_loader import ReplayTick
 from backtest.mock_broker import MockBroker
 from tests.test_helpers import make_host
 
 
-def _make_buy_order(limit: float) -> sj.FuturesOrder:
-    return sj.FuturesOrder(
-        action=sj.Action.Buy,
-        price=limit,
-        quantity=1,
-        price_type=sj.FuturesPriceType.LMT,
-        order_type=sj.OrderType.IOC,
-        octype=sj.FuturesOCType.Auto,
-        account=None,
-    )
+def _make_buy_order(limit: float) -> SimpleNamespace:
+    return SimpleNamespace(action="Buy", price=limit, quantity=1)
 
 
-def _make_sell_order(limit: float) -> sj.FuturesOrder:
-    return sj.FuturesOrder(
-        action=sj.Action.Sell,
-        price=limit,
-        quantity=1,
-        price_type=sj.FuturesPriceType.LMT,
-        order_type=sj.OrderType.IOC,
-        octype=sj.FuturesOCType.Auto,
-        account=None,
-    )
+def _make_sell_order(limit: float) -> SimpleNamespace:
+    return SimpleNamespace(action="Sell", price=limit, quantity=1)
 
 
 class _RecordingStrategy:
@@ -59,7 +44,7 @@ class TestMockBrokerMatching(unittest.TestCase):
         self,
         broker: MockBroker,
         strategy: _RecordingStrategy,
-        order: sj.FuturesOrder,
+        order: SimpleNamespace,
         tick: ReplayTick,
     ) -> list[tuple]:
         contract = broker.resolve_contract("TXFR1")
@@ -80,7 +65,7 @@ class TestMockBrokerMatching(unittest.TestCase):
         events = self._place_and_match(
             broker, strategy, _make_buy_order(18003), tick
         )
-        deals = [e for e in events if e[0] == OrderState.FuturesDeal]
+        deals = [e for e in events if e[0] == FUTURES_DEAL]
         self.assertEqual(len(deals), 1)
         self.assertAlmostEqual(deals[0][1]["price"], 18000.5)
 
@@ -94,8 +79,8 @@ class TestMockBrokerMatching(unittest.TestCase):
         events = self._place_and_match(
             broker, strategy, _make_buy_order(18003), tick
         )
-        cancels = [e for e in events if e[0] == OrderState.FuturesOrder]
-        deals = [e for e in events if e[0] == OrderState.FuturesDeal]
+        cancels = [e for e in events if e[0] == FUTURES_ORDER]
+        deals = [e for e in events if e[0] == FUTURES_DEAL]
         self.assertEqual(len(cancels), 1)
         self.assertEqual(len(deals), 0)
 
@@ -109,7 +94,7 @@ class TestMockBrokerMatching(unittest.TestCase):
         events = self._place_and_match(
             broker, strategy, _make_sell_order(17997), tick
         )
-        deals = [e for e in events if e[0] == OrderState.FuturesDeal]
+        deals = [e for e in events if e[0] == FUTURES_DEAL]
         self.assertEqual(len(deals), 1)
         self.assertAlmostEqual(deals[0][1]["price"], 17999.5)
 
@@ -126,7 +111,7 @@ class TestMockBrokerMatching(unittest.TestCase):
         events = self._place_and_match(
             broker, strategy, _make_buy_order(18003), tick
         )
-        deals = [e for e in events if e[0] == OrderState.FuturesDeal]
+        deals = [e for e in events if e[0] == FUTURES_DEAL]
         self.assertAlmostEqual(deals[0][1]["price"], 18002.5)
 
     def test_latency_gate(self):
@@ -148,7 +133,7 @@ class TestMockBrokerMatching(unittest.TestCase):
         later_tick = ReplayTick(base.replace(microsecond=20000), "18000", 1, 1)
         broker.current_dt = later_tick.datetime
         broker.process_matching_queue(later_tick, strategy)
-        deals = [e for e in strategy.events if e[0] == OrderState.FuturesDeal]
+        deals = [e for e in strategy.events if e[0] == FUTURES_DEAL]
         self.assertEqual(len(deals), 1)
 
     def test_no_lookahead_kbars(self):
@@ -206,7 +191,7 @@ class TestMockBrokerMatching(unittest.TestCase):
         events = self._place_and_match(
             broker, strategy, _make_buy_order(18003), tick
         )
-        deals = [e for e in events if e[0] == OrderState.FuturesDeal]
+        deals = [e for e in events if e[0] == FUTURES_DEAL]
         self.assertEqual(len(deals), 1)
         self.assertLessEqual(deals[0][1]["price"], 18003)
         self.assertAlmostEqual(deals[0][1]["price"], 18003)
@@ -219,7 +204,7 @@ class TestMockBrokerMatching(unittest.TestCase):
         events2 = self._place_and_match(
             broker, strategy2, _make_sell_order(17997), tick2
         )
-        deals2 = [e for e in events2 if e[0] == OrderState.FuturesDeal]
+        deals2 = [e for e in events2 if e[0] == FUTURES_DEAL]
         self.assertGreaterEqual(deals2[0][1]["price"], 17997)
 
     def test_atr_available_on_first_tick(self):
@@ -247,12 +232,22 @@ class TestMockBrokerMatching(unittest.TestCase):
             }
             broker = MockBroker(clock=lambda: clock_val["t"], cache_dir=cache_dir)
             broker.current_dt = datetime.datetime(2026, 6, 12, 8, 45, 0)
-            host = make_host()
-            host.api = broker
+            host = make_host(api=broker)
             host.contract = broker.resolve_contract(code)
             host._last_tick_exchange_dt = datetime.datetime(2026, 6, 12, 8, 45, 0)
             host.refresh_atr()
             self.assertGreater(host.current_atr, 0)
+
+    def test_make_host_place_order_reaches_mock_broker_inflight(self):
+        """Regression: adapter must bind api at construction, not via post-hoc host.api=."""
+        epoch = datetime.datetime(2026, 6, 12, 9, 0, 0).timestamp()
+        broker = self._broker_at(epoch, latency_ms=0)
+        host = make_host(api=broker)
+        host.contract = broker.resolve_contract("TXFR1")
+        host.place_order(
+            OrderSignal("Buy", 1, 18000.0, "entry", exchange_ts=1000)
+        )
+        self.assertEqual(len(broker.inflight), 1)
 
     def test_spread_calibration_optional(self):
         epoch = datetime.datetime(2026, 6, 12, 9, 0, 0).timestamp()
@@ -270,7 +265,7 @@ class TestMockBrokerMatching(unittest.TestCase):
             broker_off, strategy_off, _make_buy_order(18003), tick
         )
         fill_off = [
-            e for e in events_off if e[0] == OrderState.FuturesDeal
+            e for e in events_off if e[0] == FUTURES_DEAL
         ][0][1]["price"]
 
         broker_on = self._broker_at(epoch, latency_ms=0, spread_calibration=True)
@@ -279,7 +274,7 @@ class TestMockBrokerMatching(unittest.TestCase):
             broker_on, strategy_on, _make_buy_order(18003), tick
         )
         fill_on = [
-            e for e in events_on if e[0] == OrderState.FuturesDeal
+            e for e in events_on if e[0] == FUTURES_DEAL
         ][0][1]["price"]
         self.assertAlmostEqual(fill_off, 18000.5)
         self.assertAlmostEqual(fill_on, 18003.0)

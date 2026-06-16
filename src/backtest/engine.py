@@ -7,7 +7,9 @@ from typing import List
 
 from config import ATR_REFRESH_SEC, SESSION_END, SESSION_START
 from exchange_time import is_trading_session
+from integrations.engine_wiring import default_strategy, theman_engine_ports
 from runtime.engine import TradingEngine
+from core.runtime_config import RuntimeConfig
 from strategy.base import Strategy
 from backtest.mock_broker import MockBroker
 from storage.tick_loader import DEFAULT_CACHE_DIR
@@ -43,14 +45,26 @@ class BacktestEngine:
         dates: List[datetime.date],
         cache_dir=DEFAULT_CACHE_DIR,
         strategy: Strategy | None = None,
+        runtime_config: RuntimeConfig | None = None,
     ) -> None:
         """strategy: pluggable decision logic (see strategy.base.Strategy).
         If None, the default VWAP momentum strategy is used.
         """
         self.clock = VirtualClock()
         self.broker = MockBroker(clock=self.clock, cache_dir=cache_dir)
+        ports = theman_engine_ports(
+            api=self.broker,
+            use_mock_adapter=True,
+            runtime_config=runtime_config,
+        )
+        cfg = ports["runtime_config"]
+        if strategy is None:
+            strategy = default_strategy(cfg, ports["obs"])
         self.host = TradingEngine(
-            api=self.broker, clock=self.clock, strategy=strategy
+            api=self.broker,
+            clock=self.clock,
+            strategy=strategy,
+            **{k: v for k, v in ports.items() if k != "obs"},
         )
         self.host.contract = self.broker.resolve_contract(code)
         self.host._maybe_refresh_atr = _noop_maybe_refresh_atr

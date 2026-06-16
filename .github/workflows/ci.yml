@@ -1,11 +1,10 @@
-# CI skeleton for theman (P6-CAL + AGENTS.md requirement)
+# CI for theman (P6-CAL + AGENTS.md requirement)
 # PR / push 必須跑 python run_tests.py 全綠。
-# 目前為骨架（人類可啟用 GitHub Actions 後補 secret / 環境）。
 name: theman-tests
 
 on:
   push:
-    branches: [ main, "feat/*", "fix/*" ]
+    branches: [ main, "feat/*", "fix/*", "feature/*" ]
   pull_request:
     branches: [ main ]
 
@@ -18,7 +17,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
-      - run: pip install -r requirements.txt --quiet || pip install pyyaml --quiet
+      - run: pip install -r requirements.txt --quiet
       - run: python run_tests.py
         working-directory: .
       # 未來可加：UAT 模擬 key（若有）、determinism 重複跑、coverage gate。

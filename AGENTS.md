@@ -145,7 +145,7 @@ theman/
 │   ├── reporting/          # UAT / 績效報告
 │   ├── storage/            # tick/kbar 非同步落盤（P0-11 核心）
 │   ├── sweep/              # 參數掃描 + 確定性檢查
-│   ├── core/               # 共用型別（types.py、audit/）
+│   ├── core/               # 共用型別（types.py、audit/）、broker 縫 ports.py（BrokerPort）
 │   └── 其他頂層模組        # config.py, exchange_time.py, observability.py, alerts.py, order_errors.py...
 ├── tests/                  # 單元測試（**已完全鏡射 src/ 子資料夾**）
 │   ├── backtest/, runtime/, storage/, strategy/, sweep/, reporting/
@@ -160,8 +160,9 @@ theman/
 - **TradingEngine** (`src/runtime/engine.py`)
   - 單一狀態機，同時被 Live 與 Backtest 使用。
   - 負責：on_tick 流程、lock 保護、pending 狀態機、ATR 刷新、session 管理、對帳、落盤、告警。
-  - **建構子可注入** `api`、`clock`（回測用虛擬時鐘）、`strategy: Strategy`（Phase 7）。
+  - **建構子可注入** `api: BrokerPort`、`clock`（回測用虛擬時鐘）、`strategy: Strategy`（Phase 7）。
   - `host = TradingEngine(api=..., clock=..., strategy=...)`
+  - **Phase 8 引擎抽離**：核心已搬至 vendored `trading-engine/`（`pip install -e ./trading-engine`）；`src/runtime/` 為 re-export 薄層。`engine.py` / `session.py` 無模組頂層 `import shioaji`；下單建構在 `trading_engine.adapters.shioaji.ShioajiOrderAdapter`（唯一 `import shioaji` 建單）；mock 回測用 `MockOrderAdapter`。訂單事件字串常數在 `core/order_events.py`。`integrations/engine_wiring.py` 的 `theman_engine_ports()` 負責 logging / obs / adapter 顯式接線。詳見 [`docs/Architecture.md`](docs/Architecture.md)。
 
 - **BacktestEngine** (`src/backtest/engine.py`)
   - `self.host = TradingEngine(...)`（把 MockBroker 當 api 傳入）。

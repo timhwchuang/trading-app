@@ -273,7 +273,13 @@ class DailyObservability:
         self.daily_pnl = round(daily_pnl, 2)
         self.consecutive_loss = consecutive_loss
 
-    def build_summary(self, trade_date: str, *, quick_sl_sec: int = 5) -> dict[str, Any]:
+    def build_summary(
+        self,
+        trade_date: str,
+        *,
+        quick_sl_sec: int = 5,
+        runtime_config: Any = None,
+    ) -> dict[str, Any]:
         entry_fills = [f for f in self.fills if f["intent"] == "entry"]
         exit_fills = [f for f in self.fills if f["intent"] == "exit"]
         quick_sl = [
@@ -324,7 +330,7 @@ class DailyObservability:
         )
         return {
             "date": trade_date,
-            "params": build_config_snapshot(),
+            "params": build_config_snapshot(runtime_config),
             "signals": {
                 "momentum_triggers": self.momentum_triggers,
                 "entry_signals": self.entry_signals,
@@ -396,16 +402,15 @@ class DailyObservability:
         self._entry_signal_price = 0.0
 
 
-def build_config_snapshot() -> dict[str, Any]:
-    """Strategy params at summary time — Settings + live module constants for sweep."""
+def build_config_snapshot(runtime_config: Any = None) -> dict[str, Any]:
+    """Strategy params at summary time — Settings + instance overlay."""
     import config as cfg
-    from strategy.params import SWEEP_FIELD_TO_CONST
+    from core.runtime_config import default_runtime_config
 
+    cfg_rt = runtime_config or default_runtime_config()
     snap = asdict(cfg.settings)
     snap.pop("config_path", None)
-    for field, const in SWEEP_FIELD_TO_CONST.items():
-        if hasattr(cfg, const):
-            snap[field] = getattr(cfg, const)
+    snap.update(cfg_rt.config_snapshot_fields())
     for key in (
         "session_start",
         "session_end",

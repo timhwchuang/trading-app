@@ -33,6 +33,7 @@ tick_cache/
 # IDE / OS
 .vscode/
 .idea/
+*.code-workspace
 *.swp
 *.swo
 .DS_Store

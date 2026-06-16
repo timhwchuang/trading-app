@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import config
+from core.runtime_config import default_runtime_config
 from storage.tick_loader import ReplayTick
 from observability import build_config_snapshot
 from sweep.param_sweep import (
@@ -17,7 +18,10 @@ from sweep.param_sweep import (
     _run_backtest_summaries,
     sweep,
 )
+from integrations.engine_wiring import theman_engine_ports
 from runtime.engine import TradingEngine
+from strategy.params import StrategyParams
+from strategy.vwap_momentum import VWAPMomentumStrategy
 
 
 class TestParamSweep(unittest.TestCase):
@@ -77,15 +81,18 @@ class TestParamSweep(unittest.TestCase):
         self.assertEqual(len(results), 4)
         for row in results:
             self.assertIn("params", row)
-            # When trend keys present, veto_metrics is attached (synthetic/empty in A-class path)
             self.assertIn("veto_metrics", row)
             self.assertIn("veto_rate", row["veto_metrics"])
 
     def test_config_restored(self):
-        original_cfg = config.ENTRY_BAND_POINTS
-        saved = _apply_params({"ENTRY_BAND_POINTS": 99.0})
-        _restore_params(saved)
-        self.assertEqual(config.ENTRY_BAND_POINTS, original_cfg)
+        cfg = default_runtime_config()
+        original_cfg = cfg.live_get("ENTRY_BAND_POINTS", cfg.entry_band_points)
+        saved = _apply_params({"ENTRY_BAND_POINTS": 99.0}, cfg)
+        _restore_params(saved, cfg)
+        self.assertEqual(
+            cfg.live_get("ENTRY_BAND_POINTS", cfg.entry_band_points),
+            original_cfg,
+        )
 
     def test_daily_summary_params_match_sweep(self):
         ticks = [
@@ -95,9 +102,12 @@ class TestParamSweep(unittest.TestCase):
         def fake_replay(_code, _dates, cache_dir=None):
             yield from ticks
 
-        saved = _apply_params({"ENTRY_BAND_POINTS": 42.0})
+        cfg = default_runtime_config()
+        saved = _apply_params({"ENTRY_BAND_POINTS": 42.0}, cfg)
         try:
-            self.assertEqual(build_config_snapshot()["entry_band_points"], 42.0)
+            self.assertEqual(
+                build_config_snapshot(cfg)["entry_band_points"], 42.0
+            )
             with tempfile.TemporaryDirectory() as tmp:
                 cache_dir = Path(tmp)
                 with patch("backtest.replay.iter_replay_ticks", fake_replay):
@@ -105,19 +115,32 @@ class TestParamSweep(unittest.TestCase):
                         "TXFR1",
                         [datetime.date(2026, 6, 12)],
                         cache_dir,
+                        runtime_config=cfg,
                     )
             self.assertEqual(
                 summaries[-1]["params"]["entry_band_points"],
                 42.0,
             )
         finally:
-            _restore_params(saved)
+            _restore_params(saved, cfg)
 
     def test_sweep_params_affect_entry(self):
-        original = config.ENTRY_BAND_POINTS
-        saved = _apply_params({"ENTRY_BAND_POINTS": 7.5})
+        cfg = default_runtime_config()
+        original = cfg.live_get("ENTRY_BAND_POINTS", cfg.entry_band_points)
+        saved = _apply_params({"ENTRY_BAND_POINTS": 7.5}, cfg)
         try:
-            host = TradingEngine(api=MagicMock())
+            api = MagicMock()
+            ports = theman_engine_ports(
+                api=api, use_mock_adapter=True, runtime_config=cfg
+            )
+            host = TradingEngine(
+                api=api,
+                strategy=VWAPMomentumStrategy(
+                    params=StrategyParams.from_runtime_config(cfg),
+                    obs=ports["obs"],
+                ),
+                **{k: v for k, v in ports.items() if k != "obs"},
+            )
             host._api_connected = True
             host.current_vwap = 18000.0
             host.vol_1s = 1
@@ -130,13 +153,19 @@ class TestParamSweep(unittest.TestCase):
             host.consecutive_loss = 0
             host.last_exit_time = 0
             dt = datetime.datetime(2026, 6, 12, 10, 0, 0)
-            self.assertEqual(config.ENTRY_BAND_POINTS, 7.5)
+            self.assertEqual(
+                cfg.live_get("ENTRY_BAND_POINTS", cfg.entry_band_points),
+                7.5,
+            )
             signal = host.process_strategy(1000, 18000.0, dt)
             self.assertIsNotNone(signal)
             self.assertEqual(signal.intent, "entry")
         finally:
-            _restore_params(saved)
-        self.assertEqual(config.ENTRY_BAND_POINTS, original)
+            _restore_params(saved, cfg)
+        self.assertEqual(
+            cfg.live_get("ENTRY_BAND_POINTS", cfg.entry_band_points),
+            original,
+        )
 
 
 if __name__ == "__main__":

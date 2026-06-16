@@ -7,6 +7,7 @@
 | 文件                                                       | 用途                                       |
 | ---------------------------------------------------------- | ------------------------------------------ |
 | [`../AGENTS.md`](../AGENTS.md)                             | **AI 主規範**（架構、gate、文件紀律、runbook） |
+| [`Architecture.md`](Architecture.md)                      | 四大類 + Broker 解耦（`BrokerPort`）+ 事件規劃（Phase 8） |
 | [`.cursor/rules/`](../.cursor/rules/)                      | Cursor `alwaysApply` 規則                  |
 | [`.grok/settings.json`](../.grok/settings.json)            | Grok 專案 instructions 摘要                |
 | [`BackTesting.md`](BackTesting.md)                         | 回測哲學、同構性、專案結構、Phase 進度     |
@@ -24,7 +25,7 @@
 - **執行宿主**：`src/runtime/engine.py` → `TradingEngine`
 - **回測**：`src/backtest/engine.py` → `BacktestEngine.host`
 - **決策 plugin**：`src/strategy/`（預設 `VWAPMomentumStrategy`）
-- **契約**：`src/strategy/base.py` → `Strategy` / `BaseStrategy`
+- **契約**：`src/strategy/base.py` → `Strategy` / `BaseStrategy`；`src/core/ports.py` → `BrokerPort`（券商縫）
 - **趨勢濾網 / 校準**：`src/strategy/trend.py`；`src/reporting/trend_calibration.py`（P6-1-CAL harness）
 - **測試**：`python run_tests.py`（**155** 項）；mock 宿主 `tests/test_helpers.make_host()`
 - **CI**：`.github/workflows/ci.yml`（ubuntu + `run_tests.py`）

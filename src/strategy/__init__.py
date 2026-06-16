@@ -16,7 +16,9 @@ Example — minimal plugin (inherits defaults for momentum, exit, audit)::
     host = TradingEngine(api=MagicMock(), strategy=HoldFlat())
     # host.strategy is the injected plugin; host itself is the execution engine.
 
-The default plugin is ``VWAPMomentumStrategy`` when ``strategy`` is omitted.
+Inject ``VWAPMomentumStrategy`` at the app layer (``live/__main__.py``,
+``BacktestEngine``, or ``tests.test_helpers.make_host``); ``TradingEngine``
+requires an explicit ``strategy``.
 """
 
 from strategy.base import BaseStrategy, Strategy, StrategySideEffects

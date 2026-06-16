@@ -7,12 +7,45 @@ while preserving cross-test imports such as ``from tests.test_helpers import ...
 
 from __future__ import annotations
 
+import subprocess
 import sys
 import unittest
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent
+_TE_ROOT = _ROOT / "trading-engine"
+_TE_SRC = _TE_ROOT / "src"
 _SRC = _ROOT / "src"
+
+
+def _ensure_trading_engine() -> None:
+    """Prefer installed package; else editable install; else vendored/sibling src."""
+    try:
+        import trading_engine  # noqa: F401
+        return
+    except ImportError:
+        pass
+
+    sibling = _ROOT.parent / "trading-engine"
+    for candidate in (_TE_ROOT, sibling):
+        if (candidate / "pyproject.toml").is_file():
+            try:
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", "-e", str(candidate), "-q"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                import trading_engine  # noqa: F401
+                return
+            except (subprocess.CalledProcessError, ImportError):
+                src = candidate / "src"
+                if src.is_dir():
+                    sys.path.insert(0, str(src))
+                    return
+
+
+_ensure_trading_engine()
+
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 

@@ -16,6 +16,7 @@
 | Phase 5 Pilot          | 待 UAT 全過 + CA 憑證；**秒停損率（P2-7）為硬指標**                                                                                                                                                                        |
 | **Phase 6 策略真實化** | **骨架已落地（旗標預設全關）**：P6-1～P6-3 + **P6-6 ✅**；**P6-1-CAL A 類 1～5 ✅ 已 merge `main`**（B 類 6～8 待 UAT tick；**非 UAT Blocker**）；**Live 前須 B 類校準 + 人類 Go/No-Go 才開旗標**；P6-4/5 待做 — 見 [`docs/CodeReview#2.md`](docs/CodeReview%232.md) |
 | **Phase 7 策略介面**   | **✅ 已落地**：`Strategy` Protocol + `BaseStrategy`；host=`TradingEngine` / `BacktestEngine.host`；可注入自訂策略並 survive tick — 見 [`src/strategy/base.py`](src/strategy/base.py)                                        |
+| **Phase 8 引擎抽離 / 事件**   | **✅ 全量 extraction + merge fix 落地**：`trading-engine/` vendored + CI `pip install -e`；`ShioajiOrderAdapter` / `MockOrderAdapter` 顯式接線；`strategy/base.py` re-export；`LOG_FILE`/`obs` 接回。🔜 事件層（NDJSON sink）待第一段乾淨 UAT 後；`session.sync_positions` Action 字串化 — 見 [`docs/Architecture.md`](docs/Architecture.md) |
 
 > **UAT Ready ≠ Live Ready**。工程體質（狀態機 / 對帳 / 觀測）已達 UAT 標準（Review #2 評 8.5/10）；但 **Phase 6 策略真實化是「進正式盤」的 gate，不是「進 UAT」的 gate**。UAT 仍依本檔核心原則：**驗狀態機與對帳，不是看績效**。Phase 6 須在 **UAT 收集到足夠 tick / SIGNAL_AUDIT 數據後**校準，禁止憑空調參上線。
 

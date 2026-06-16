@@ -327,15 +327,25 @@ class TestStrategyInterfaceInjection(unittest.TestCase):
         self.assertIs(host.strategy, dummy)
 
     def test_trading_engine_constructor_accepts_strategy(self):
+        from core.runtime_config import default_runtime_config
         from runtime.engine import TradingEngine
+        from trading_engine.adapters.mock import MockOrderAdapter
 
+        api = MagicMock()
         dummy = _DummyStrategy()
-        host = TradingEngine(api=MagicMock(), strategy=dummy)
+        host = TradingEngine(
+            api=api,
+            strategy=dummy,
+            runtime_config=default_runtime_config(),
+            order_adapter=MockOrderAdapter(api),
+        )
 
         self.assertIs(host.strategy, dummy)
 
     def test_host_reset_momentum_delegates_to_strategy_reset(self):
+        from core.runtime_config import default_runtime_config
         from runtime.engine import TradingEngine
+        from trading_engine.adapters.mock import MockOrderAdapter
 
         calls: list[str] = []
 
@@ -343,16 +353,30 @@ class TestStrategyInterfaceInjection(unittest.TestCase):
             def reset(self) -> None:
                 calls.append("reset")
 
-        host = TradingEngine(api=MagicMock(), strategy=_SpyStrategy())
+        api = MagicMock()
+        host = TradingEngine(
+            api=api,
+            strategy=_SpyStrategy(),
+            runtime_config=default_runtime_config(),
+            order_adapter=MockOrderAdapter(api),
+        )
         host.reset_momentum()
         self.assertEqual(calls, ["reset"])
 
     def test_custom_strategy_survives_one_tick(self):
         """Injected BaseStrategy subclass must survive a full on_tick pass."""
+        from core.runtime_config import default_runtime_config
         from runtime.engine import TradingEngine
+        from trading_engine.adapters.mock import MockOrderAdapter
 
+        api = MagicMock()
         dummy = _DummyStrategy()
-        host = TradingEngine(api=MagicMock(), strategy=dummy)
+        host = TradingEngine(
+            api=api,
+            strategy=dummy,
+            runtime_config=default_runtime_config(),
+            order_adapter=MockOrderAdapter(api),
+        )
         host._api_connected = True
         host._order_sync_mode = True
         tick = ReplayTick(

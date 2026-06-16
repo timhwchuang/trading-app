@@ -14,6 +14,7 @@ from storage.tick_loader import DEFAULT_CACHE_DIR
 from sweep.determinism_check import _AuditCaptureHandler
 from reporting.performance_metrics import aggregate_daily_performance, sweep_score_from_kpi
 from reporting.trend_calibration import compute_trend_veto_calibration
+from core.runtime_config import default_runtime_config
 from strategy.params import (
     apply_strategy_params,
     restore_strategy_params,
@@ -30,6 +31,7 @@ def _run_backtest_summaries(
     code: str,
     dates: list,
     cache_dir: Path,
+    runtime_config=None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Run backtest under capture handler.
     Returns (daily_summaries, signal_audits) so CAL-3 can feed real SIGNAL_AUDIT
@@ -42,7 +44,9 @@ def _run_backtest_summaries(
     strategy_logger.addHandler(handler)
     strategy_logger.setLevel(logging.INFO)
     try:
-        engine = BacktestEngine(code, dates, cache_dir=cache_dir)
+        engine = BacktestEngine(
+            code, dates, cache_dir=cache_dir, runtime_config=runtime_config
+        )
         engine.run()
     finally:
         strategy_logger.removeHandler(handler)
@@ -125,10 +129,15 @@ def sweep(
     results: list[dict[str, Any]] = []
     for combo in combos:
         params = dict(zip(keys, combo))
-        saved = apply_strategy_params(params)
+        cfg = default_runtime_config()
+        saved = apply_strategy_params(params, cfg)
         try:
-            train_summaries, _train_signals = _run_backtest_summaries(code, dates_train, cache_path)
-            valid_summaries, valid_signals = _run_backtest_summaries(code, dates_valid, cache_path)
+            train_summaries, _train_signals = _run_backtest_summaries(
+                code, dates_train, cache_path, runtime_config=cfg
+            )
+            valid_summaries, valid_signals = _run_backtest_summaries(
+                code, dates_valid, cache_path, runtime_config=cfg
+            )
             train_kpi = _aggregate_kpi(train_summaries)
             valid_kpi = _aggregate_kpi(valid_summaries)
             # P6-1-CAL-3/4/6: if trend params present, feed captured SIGNAL_AUDITs (reason=trend_veto)
@@ -171,7 +180,7 @@ def sweep(
                 row["veto_metrics"] = veto_metrics
             results.append(row)
         finally:
-            restore_strategy_params(saved)
+            restore_strategy_params(saved, cfg)
 
     results.sort(key=lambda row: row["valid_score"], reverse=True)
 

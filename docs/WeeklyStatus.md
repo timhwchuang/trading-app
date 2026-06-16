@@ -47,6 +47,54 @@
 
 ---
 
+### 2026-06-16（Phase 8 merge fix landed）
+
+**目前進度**
+- **B1 版控**：`trading-engine/` vendored 至 `theman/trading-engine/`；`requirements.txt` `-e ./trading-engine`；CI 安裝後跑測試；`run_tests.py` 支援 pip / sys.path fallback。
+- **B2 日誌**：`theman_engine_ports()` 最早呼叫 `setup_async_logging(LOG_LEVEL, LOG_FILE)`。
+- **B3 obs**：單一 `DailyObservability` 注入 `ThemanTelemetryPort` + `default_strategy(..., obs=obs)`。
+- **B4 adapter**：`TradingEngine` 必填 `order_adapter`；移除 `hasattr(inflight)` 啟發式；`integrations/` 顯式選 `MockOrderAdapter` / `ShioajiOrderAdapter`。
+- **B5 re-export**：`strategy/base.py` → `from trading_engine.core.strategy import *`。
+- **B6 文件**：`AGENTS.md` / `TODO.md` / `Architecture.md` / `BackTestingSpec.md` 敘事同步。
+- **P0-1 / P0-2**：`make_host(api=broker)` 建構期綁定；`ThemanRuntimeConfig` 獨占 archive 旗標。
+- `python run_tests.py` **158** 項全綠。
+
+**人類必做（Follow-up）**
+- [ ] `git add trading-engine/` 並 commit vendored package（首次納入版控）。
+- [ ] P1 項目（import 風格統一、TypedDict wiring 等）可開 follow-up PR。
+
+**Pending / 待決策**
+- `session.sync_positions` Action 字串化（P2）。
+- NDJSON 事件層仍待第一段乾淨 UAT 後。
+
+**備註 / 開發日記**
+- Code review Blocker B1–B6 + P0 已依 [`Phase8-MergeFixSpec.md`](Phase8-MergeFixSpec.md) 落地；可進 merge gate 複驗。
+
+---
+
+### 2026-06-16（Phase 8 Step 1：Broker 解耦 — `BrokerPort` + engine 去 shioaji 頂層 import）
+
+**目前進度**
+- 新增 `src/core/ports.py` → `BrokerPort` Protocol，正名 `TradingEngine.api` 既有的券商縫（live=Shioaji / backtest=MockBroker / 測試=MagicMock）。僅型別/文件用途，不在 runtime 強制（duck typing 仍通過）。
+- `runtime/engine.py`、`runtime/session.py`：**移除模組頂層 `import shioaji`**——型別走 `TYPE_CHECKING`、建構與 live-only 路徑（start / no-tick 看門狗 / reconnect / sync_positions）走 lazy import。**零行為變更**。
+- 新增 [`docs/Architecture.md`](Architecture.md)：四大類（TradingEngine/Backtest/Storage/Reporting）+ Broker 解耦 + 事件規劃。
+- `python run_tests.py` **155** 項全綠（重構前後一致）。
+- 範圍依使用者決策（plan review）：**只做 Phase 0/1 零行為變更清理**；事件層 / package 搬移 / MQ **延後到第一段乾淨 UAT 之後**。
+
+**人類必做（Follow-up）**
+- [x] Code review completed via strict code-review persona (see `docs/CodeReview-Phase8-Step1-20260616.md`). 155 tests OK. Live shioaji isolation verified correct. 4 high-severity structural issues (leakage of theman heuristic into trading-engine, Strategy Protocol duplication instead of re-export, sys.path/import layering, docs drift) flagged as pre-merge must-fix; 6 other suggestions + next-step recommendations. Review file contains full citations + "code judo" proposals.
+
+**Pending / 待決策**
+- `order_executor.py` 仍直接建 `shioaji.FuturesOrder` + 比較 `OrderState`/`Action`（與 MockBroker 共用契約）；列為下一個抽離目標（`ShioajiBroker.place_futures_ioc(...)`）。
+- 事件層第一步擬採 **append-only NDJSON sink**（in-proc 同步、lock 外 emit；不可 threaded fan-out 以免破壞回測確定性）。
+
+**備註 / 開發日記**
+- 關鍵發現：backtest 早已注入 `MockBroker` 當 `api` 且**不走 `start()`**，所以「engine 與券商解耦」其實已完成一半——本次只是把隱性縫正名 + 收斂 import surface。
+- `engine.py` 的 `OrderState` 為 dead import（僅 order_executor 實際使用），已順手移除。
+- **Code review (2026-06-16)**：使用 code-review skill + reviewer persona 嚴格審查（84 tool calls）。整體方向正確、隔離良好、LOC 大減；但未通過「ambitious approval bar」（結構性退化 + 錯過簡化機會）。Issue 1（trading-engine 內的 `hasattr(inflight)` 洩漏 theman 細節）與 Issue 2（strategy/base.py 整份 verbatim dupe 而非 re-export）為最高優先。已更新本節追蹤。修復後再 merge。
+
+---
+
 ### 2026-06-16（P6-1-CAL merge → `main` + follow-up `d127f50`）
 
 **目前進度**

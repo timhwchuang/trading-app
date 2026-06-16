@@ -165,17 +165,18 @@ class TestIntentCancelledTag(unittest.TestCase):
 
 class TestRawOrderEventDump(unittest.TestCase):
     def test_dumps_each_stat_type_once_when_enabled(self):
-        from shioaji import OrderState
         from unittest.mock import patch
+
+        from core.order_events import FUTURES_DEAL, FUTURES_ORDER
 
         host = make_host()
         msg = {"price": "18000", "quantity": 1, "action": "Buy"}
 
         with patch("config.DUMP_ORDER_EVENTS", True):
             with self.assertLogs("theman", level="INFO") as logs:
-                host.handle_order_event(OrderState.FuturesDeal, msg)
-                host.handle_order_event(OrderState.FuturesDeal, msg)
-                host.handle_order_event(OrderState.FuturesOrder, {"status": {}})
+                host.handle_order_event(FUTURES_DEAL, msg)
+                host.handle_order_event(FUTURES_DEAL, msg)
+                host.handle_order_event(FUTURES_ORDER, {"status": {}})
 
         raw_lines = [line for line in logs.output if "RAW_ORDER_EVT" in line]
         self.assertEqual(len(raw_lines), 2)

@@ -7,10 +7,8 @@ from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any, Callable, List, Optional
 
-import shioaji as sj
-from shioaji import OrderState
-
 from config import MOMENTUM_VOL_1S, SESSION_FORCE_FLATTEN_TIME
+from core.order_events import FUTURES_DEAL, FUTURES_ORDER
 from storage.tick_loader import DEFAULT_CACHE_DIR
 from storage.kbar_loader import iter_kbars_in_range
 from exchange_time import is_at_or_after
@@ -61,7 +59,11 @@ class MockBroker:
         self.inflight.append(
             {
                 "order_id": order_id,
-                "action": "Buy" if order.action == sj.Action.Buy else "Sell",
+                "action": (
+                    order.action
+                    if isinstance(order.action, str)
+                    else ("Buy" if getattr(order.action, "name", None) == "Buy" else "Sell")
+                ),
                 "limit_price": float(order.price),
                 "quantity": int(order.quantity),
                 "arrive_after": self.clock() + self.latency_ms / 1000.0,
@@ -148,7 +150,7 @@ class MockBroker:
                     fill = None
             if fill is None:
                 host.handle_order_event(
-                    OrderState.FuturesOrder,
+                    FUTURES_ORDER,
                     {
                         "operation": {"op_code": "00", "op_type": "Cancel"},
                         "status": {"status": "Cancelled", "deal_quantity": 0},
@@ -157,7 +159,7 @@ class MockBroker:
                 )
             else:
                 host.handle_order_event(
-                    OrderState.FuturesDeal,
+                    FUTURES_DEAL,
                     {
                         "price": fill,
                         "quantity": ord["quantity"],

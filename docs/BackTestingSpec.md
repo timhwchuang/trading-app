@@ -24,13 +24,15 @@
 
 `runtime.TradingEngine` 已具備：
 
-* 建構子：`TradingEngine(api=None, clock=None, strategy=None)`。
+* 建構子：`TradingEngine(api: BrokerPort | None=None, clock=None, strategy=None)`。
+  * `api`：券商縫，型別為 `core.ports.BrokerPort`（僅文件/型別用途，不強制）；回測注入 `MockBroker`，省略時 lazy 建 `shioaji.Shioaji`。
   * `strategy`：決策 plugin（`Strategy`）；省略時預設 `VWAPMomentumStrategy`。
+  * Phase 8：`engine.py`/`session.py` 已無模組頂層 `import shioaji`（見 `docs/Architecture.md`）。
 * `on_tick(tick)`：`tick` 只需具備 `.datetime`(datetime, 台北 naive)、`.close`(str)、
   `.volume`(int)、`.tick_type`(int)。`storage.tick_loader.ReplayTick` 已符合。
-* `place_order(signal)`：內部建 `sj.FuturesOrder(..., account=self.api.futopt_account)`，
-  呼叫 `self.api.place_order(contract, order, timeout=0)`，期待回傳物件有 `.order.id`。
-  **已驗證 `account=None` 可正常建構。**
+* `place_order(signal)`：經注入的 `order_adapter` 建單——live 為 `ShioajiOrderAdapter`（內部 `sj.FuturesOrder`），
+  回測為 `MockOrderAdapter`（`SimpleNamespace` action 字串）。皆呼叫 `self.api.place_order(contract, order, timeout=0)`，
+  期待回傳物件有 `.order.id`。**已驗證 `account=None` 可正常建構。**
 * 成交回報入口：`handle_order_event(stat, msg)`：
   * `stat == OrderState.FuturesDeal`：`msg` 需含 `price`(可 float)、`quantity`(int)、
     `action`("Buy"/"Sell")、`trade_id`(str)。

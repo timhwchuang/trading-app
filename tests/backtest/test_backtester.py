@@ -79,8 +79,9 @@ class TestBacktestEngine(unittest.TestCase):
         self.assertEqual(seen[0].time(), datetime.time(8, 46))
 
     def test_premarket_tick_still_runs_matching(self):
-        import shioaji as sj
-        from shioaji import OrderState
+        from types import SimpleNamespace
+
+        from core.order_events import FUTURES_DEAL
 
         premarket_tick = ReplayTick(
             datetime.datetime(2026, 6, 12, 8, 40, 0), "18000", 1, 1
@@ -88,15 +89,7 @@ class TestBacktestEngine(unittest.TestCase):
         engine = BacktestEngine("TXFR1", [datetime.date(2026, 6, 12)])
         engine.broker.latency_ms = 0
         contract = engine.broker.resolve_contract("TXFR1")
-        order = sj.FuturesOrder(
-            action=sj.Action.Buy,
-            price=18003,
-            quantity=1,
-            price_type=sj.FuturesPriceType.LMT,
-            order_type=sj.OrderType.IOC,
-            octype=sj.FuturesOCType.Auto,
-            account=None,
-        )
+        order = SimpleNamespace(action="Buy", price=18003, quantity=1)
         trade = engine.broker.place_order(contract, order)
         engine.host.pending_order_id = str(trade.order.id)
         engine.host.pending_intent = "entry"
@@ -123,7 +116,7 @@ class TestBacktestEngine(unittest.TestCase):
         with patch("backtest.replay.iter_replay_ticks", fake_replay):
             engine.run()
 
-        deals = [e for e in events if e[0] == OrderState.FuturesDeal]
+        deals = [e for e in events if e[0] == FUTURES_DEAL]
         self.assertEqual(len(deals), 1)
         self.assertEqual(on_tick_times, [])
         self.assertLess(premarket_tick.datetime.time(), datetime.time(8, 45))

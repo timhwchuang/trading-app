@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from shioaji import OrderState
+from core.order_events import FUTURES_DEAL
 
 from tests.test_helpers import arm_pending_entry, arm_pending_exit, make_host
 
@@ -20,7 +20,7 @@ class TestDealStateMachine(unittest.TestCase):
             "action": "Buy",
             "trade_id": "ord-entry-1",
         }
-        host.handle_order_event(OrderState.FuturesDeal, msg)
+        host.handle_order_event(FUTURES_DEAL, msg)
 
         self.assertFalse(host.is_pending)
         self.assertTrue(host.has_position)
@@ -39,7 +39,7 @@ class TestDealStateMachine(unittest.TestCase):
             "action": "Buy",
             "trade_id": "ord-b",
         }
-        host.handle_order_event(OrderState.FuturesDeal, msg)
+        host.handle_order_event(FUTURES_DEAL, msg)
 
         self.assertTrue(host.is_pending)
         self.assertFalse(host.has_position)
@@ -60,7 +60,7 @@ class TestDealStateMachine(unittest.TestCase):
             "action": "Sell",
             "trade_id": "ord-exit-1",
         }
-        host.handle_order_event(OrderState.FuturesDeal, msg)
+        host.handle_order_event(FUTURES_DEAL, msg)
 
         self.assertFalse(host.is_pending)
         self.assertFalse(host.has_position)

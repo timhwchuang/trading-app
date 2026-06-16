@@ -1,2 +1,3 @@
+-e ./trading-engine
 shioaji
 PyYAML>=6.0
