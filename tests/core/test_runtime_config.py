@@ -25,10 +25,11 @@ class TestThemanRuntimeConfig(unittest.TestCase):
             cfg = default_runtime_config()
             self.assertTrue(cfg.tick_archive)
 
-    def test_engine_runtime_config_has_no_env_archive_flags(self):
+    def test_engine_runtime_config_archive_flags_default_false(self):
         cfg = EngineRuntimeConfig(_to_engine_settings())
-        with self.assertRaises(AttributeError):
-            _ = cfg.tick_archive
+        self.assertFalse(cfg.tick_archive)
+        self.assertFalse(cfg.kbars_archive)
+        self.assertFalse(cfg.dump_order_events)
 
 
 if __name__ == "__main__":
