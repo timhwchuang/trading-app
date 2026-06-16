@@ -241,17 +241,26 @@ class TestTrendHelpers(unittest.TestCase):
         Simulates the exact problem the 400*2 heuristic + raw [-N:] tried to paper over:
         multi-day kbars (ATR long lookback) containing prior session + gap + new day move.
         The select helper (using ts + trading_day_for_daily_reset) must protect compute_trend.
+
+        CQR review fix: the guard now *quantitatively exercises the claimed failure mode*.
+        Recent trading day is deliberately given too few bars to fill the ema window after resample
+        (tf=5, ema=10 -> resampled needs ~10 points; give recent only ~18 bars -> ~4 after stride -> Flat).
+        Full long polluted list supplies enough history in the resample tail to fabricate a committed Long.
+        This proves "未切片輸入會產生錯誤 regime" under the conditions the hygiene matters (sparse recent day at open).
         """
         import datetime as dt_mod
         from exchange_time import select_recent_trading_days_closes, trading_day_for_daily_reset
 
-        # Build fake "kbars raw" spanning two trading days with ts (ns epoch style)
-        # Day 1 (2026-06-12): flat/choppy
+        # Build fake "kbars raw" spanning two trading days with ts (ns epoch style).
+        # Prior day (2026-06-12): strong upward ramp. With short recent, resample stride from end of *full* list
+        # will land some of its tail bars back into the prior ramp -> committed Long under old behavior.
         base_day1 = dt_mod.datetime(2026, 6, 12, 9, 0)
-        day1_closes = [100.0 + (i % 5 - 2) * 0.1 for i in range(30)]  # noisy flat
-        # Day 2 (2026-06-13): strong up leg after gap
+        day1_closes = [100.0 + i * 0.5 for i in range(60)]  # strong positive ramp
+        # Today sparse (at open): deliberately *very* few bars so that resample on *recent only* has
+        # len(resampled) << ema_period -> Flat (correct, no fake regime from stale data).
+        # tf=5, ema=8: need < ~40 recent for the guard; use 7 bars -> ~2 resampled <8 -> Flat.
         base_day2 = dt_mod.datetime(2026, 6, 13, 8, 50)
-        day2_closes = [100.0] + [100.5 + i * 0.6 for i in range(25)]  # clean ramp Long
+        day2_closes = [100.0 + i * 0.05 for i in range(7)]  # tiny move, too few for ema window
 
         # Simulate raw kbars object with .ts (ns) + .Close parallel (like live api + backtest _KBars now)
         all_closes = day1_closes + day2_closes
@@ -268,26 +277,27 @@ class TestTrendHelpers(unittest.TestCase):
             ts = all_ts
             Close = all_closes
 
-        # Old heuristic style (full or last ~800) on polluted would mix days -> likely weak/Flat or wrong
-        # (our compute on full list here is the "bad input" the old code could feed)
+        # Old heuristic style (full or last ~800) on polluted: resample tail can reach prior-day ramp -> Long
         full_dir, _ = compute_trend(
-            all_closes, mode="ema", timeframe_min=5, ema_period=6, min_strength=0.5
+            all_closes, mode="ema", timeframe_min=5, ema_period=10, min_strength=0.3
         )
 
-        # Proper CAL-1 slice using max_days=1 to simulate the hygiene cut (recent trading day only)
-        ref = base_day2 + dt_mod.timedelta(minutes=10)
+        # Proper CAL-1 slice (max_days=1): only recent sparse day -> resampled too short -> Flat (correct conservative)
+        ref = base_day2 + dt_mod.timedelta(minutes=5)
         sliced = select_recent_trading_days_closes(_FakeRaw(), ref, max_days=1)
         sliced_dir, _ = compute_trend(
-            sliced, mode="ema", timeframe_min=5, ema_period=6, min_strength=0.5
+            sliced, mode="ema", timeframe_min=5, ema_period=10, min_strength=0.3
         )
 
-        # With only recent day the ramp is strong Long; full polluted input may be Flat or weaker direction
-        # Assert the guard: sliced must be the "correct" committed Long (the point of the hygiene)
-        self.assertEqual(sliced_dir, "Long")
-        # The select demonstrably drops prior day bars (len < total) when days differ
+        # Guard assertion (CQR review fix): sliced (only recent, too sparse for ema) is correctly Flat (conservative).
+        # Full (old polluted heuristic) fabricates a committed direction (Long or Short) from stale prior-day data
+        # that resample tail reaches. This *is* the "未切片輸入會產生錯誤 regime" failure mode the hygiene prevents.
+        self.assertEqual(sliced_dir, "Flat")
+        self.assertNotEqual(full_dir, "Flat")
         self.assertLess(len(sliced), len(all_closes))
-        # The existence of the select + this test (plus engine using it instead of 400 magic) is the
-        # regression guard that "未切片輸入會產生錯誤 regime".
+        # Existence of select + this quantitative guard (engine now uses it instead of 400 magic) protects the
+        # regime label that later feeds trend_allows_entry + reason=trend_veto + delta expectancy harness.
+        # All synthetic; real UAT calibration still required (see docstring).
 
 
 # --- Interface injection test (new for pluggable strategies) ---

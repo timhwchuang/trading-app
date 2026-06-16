@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import datetime
+from collections import OrderedDict
 
 TAIWAN_TZ = datetime.timezone(datetime.timedelta(hours=8))
 
@@ -115,6 +116,18 @@ def select_recent_trading_days_closes(
     Uses kbar Datetime (via ts) + trading_day_for_daily_reset to cut cross-session / night / gap pollution
     that the old approx_bars_per_trading_day=400 heuristic could suffer.
 
+    IMPORTANT SCOPE (honest calibration note per CQR hygiene):
+    - Effective regime detection scale and strength threshold power remain *exclusively* determined by
+      resample_closes(timeframe_min) + ema_period/slope_min + min_strength (ATR-normalized) inside compute_trend.
+      This helper *only* solves cross-trading-day / night / gap bar inclusion into the *input list* fed to compute_trend.
+    - All unit coverage and regression guards use synthetic data. Real UAT tick + KBARS_ARCHIVE calibration
+      (B-class P6-1-CAL-6/7) is still required before trusting impact on live trend_dir/strength, veto_rate, or
+      delta expectancy numbers. Do not treat synthetic guard as statistical edge proof.
+    - Default max_days=2 is chosen to guarantee the HTF detector has enough recent bars to fill ema_period
+      windows even when "today" (at first used_long ATR pull / open) has very few 1m bars so far; it trades off
+      vs. including exactly one prior full trading day's closes. Rationale is engineering (HTF window fill) not
+      a claim of "macro bias".
+
     Accepts:
     - Shioaji-style raw (has .ts list[int ns] parallel to .Close)
     - Iterable of objects with .ts (datetime) and .Close (e.g. KBarRecord list)
@@ -131,8 +144,9 @@ def select_recent_trading_days_closes(
         for i in range(len(ts_list)):
             try:
                 dt = _ts_ns_to_naive_dt(int(ts_list[i]))
-            except Exception:
-                # Fallback: if already datetime-like
+            except (TypeError, ValueError, OverflowError, OSError):
+                # Fallback only on parse failure (rare); reference_dt anchors the day for this bar
+                # (see engine call site: passes _last_tick_exchange_dt or now()).
                 dt = ts_list[i] if isinstance(ts_list[i], datetime.datetime) else reference_dt
             pairs.append((dt, float(close_list[i])))
     else:
@@ -150,7 +164,6 @@ def select_recent_trading_days_closes(
         return []
 
     # Group by trading day (session-aware)
-    from collections import OrderedDict
     day_to_closes: OrderedDict[datetime.date, list[float]] = OrderedDict()
     for dt, c in pairs:
         day = trading_day_for_daily_reset(dt)
