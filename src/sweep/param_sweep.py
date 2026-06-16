@@ -30,7 +30,12 @@ def _run_backtest_summaries(
     code: str,
     dates: list,
     cache_dir: Path,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Run backtest under capture handler.
+    Returns (daily_summaries, signal_audits) so CAL-3 can feed real SIGNAL_AUDIT
+    (incl. reason=trend_veto) into compute_trend_veto_calibration instead of always-empty.
+    _AuditCaptureHandler already matches "SIGNAL_AUDIT " prefix (P1-6 fix).
+    """
     handler = _AuditCaptureHandler()
     strategy_logger = logging.getLogger("theman")
     prev_level = strategy_logger.level
@@ -43,10 +48,19 @@ def _run_backtest_summaries(
         strategy_logger.removeHandler(handler)
         strategy_logger.setLevel(prev_level)
     summaries: list[dict[str, Any]] = []
+    signals: list[dict[str, Any]] = []
     for label, payload in handler.records:
         if label == "DAILY_SUMMARY":
-            summaries.append(json.loads(payload))
-    return summaries
+            try:
+                summaries.append(json.loads(payload))
+            except Exception:
+                pass
+        elif label == "SIGNAL_AUDIT":
+            try:
+                signals.append(json.loads(payload))
+            except Exception:
+                pass
+    return summaries, signals
 
 
 def _aggregate_kpi(summaries: list[dict[str, Any]]) -> dict[str, Any]:
@@ -113,20 +127,38 @@ def sweep(
         params = dict(zip(keys, combo))
         saved = apply_strategy_params(params)
         try:
-            train_kpi = _aggregate_kpi(
-                _run_backtest_summaries(code, dates_train, cache_path)
-            )
-            valid_kpi = _aggregate_kpi(
-                _run_backtest_summaries(code, dates_valid, cache_path)
-            )
-            # P6-1-CAL-3: if trend params were swept, attach veto calibration metrics via harness.
-            # For A-class / synthetic tests we call with empty (real UAT would parse SIGNAL_AUDIT
-            # reason=trend_veto from logs or extended capture handler and supply proper forward).
-            # The structure + call exercises the harness and puts veto_rate / delta in the report.
+            train_summaries, _train_signals = _run_backtest_summaries(code, dates_train, cache_path)
+            valid_summaries, valid_signals = _run_backtest_summaries(code, dates_valid, cache_path)
+            train_kpi = _aggregate_kpi(train_summaries)
+            valid_kpi = _aggregate_kpi(valid_summaries)
+            # P6-1-CAL-3/4/6: if trend params present, feed captured SIGNAL_AUDITs (reason=trend_veto)
+            # from the valid run into the harness instead of hardcoded [].
+            # This makes veto_metrics a real (if still synthetic-toy fwd for A-class) conditional
+            # expectation instead of an empty-shell always-0 structure.
+            # B-class will supply better get_forward_pnl from replay + real UAT logs.
             veto_metrics = None
-            if any(str(k).startswith("trend_") for k in params.keys()):
+            if any(
+                str(k).startswith("trend_")
+                or str(k).upper().startswith("TREND_")
+                or "TREND" in str(k).upper()
+                for k in params.keys()
+            ):
                 try:
-                    veto_metrics = compute_trend_veto_calibration([], allowed_audits=[])
+                    veto_audits = [
+                        s
+                        for s in valid_signals
+                        if str(s.get("reason", "")).lower() in ("trend_veto", "trend veto")
+                        or "trend_veto" in str(s)
+                    ]
+                    allowed_audits = [
+                        s
+                        for s in valid_signals
+                        if s.get("intent") == "entry"
+                        and str(s.get("reason", "")).lower() not in ("trend_veto", "trend veto")
+                    ]
+                    veto_metrics = compute_trend_veto_calibration(
+                        veto_audits, allowed_audits=allowed_audits or None
+                    )
                 except Exception:
                     veto_metrics = {"note": "harness call failed (synthetic path)"}
             row = {

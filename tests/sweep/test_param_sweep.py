@@ -101,7 +101,7 @@ class TestParamSweep(unittest.TestCase):
             with tempfile.TemporaryDirectory() as tmp:
                 cache_dir = Path(tmp)
                 with patch("backtest.replay.iter_replay_ticks", fake_replay):
-                    summaries = _run_backtest_summaries(
+                    summaries, _signals = _run_backtest_summaries(
                         "TXFR1",
                         [datetime.date(2026, 6, 12)],
                         cache_dir,

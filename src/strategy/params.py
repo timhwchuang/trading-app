@@ -25,6 +25,13 @@ SWEEPABLE_PARAMS = frozenset(
         "FIXED_TP_POINTS",
         "TRAIL_POINTS",
         "HARD_STOP_POINTS",
+        # P6-1 CAL-3: trend filter params are sweepable (upper names for apply/restore)
+        "TREND_FILTER_ENABLED",
+        "TREND_MIN_STRENGTH",
+        "TREND_TIMEFRAME_MIN",
+        "TREND_MODE",
+        "TREND_EMA_PERIOD",
+        "TREND_SLOPE_MIN",
     }
 )
 
@@ -36,6 +43,13 @@ SWEEP_FIELD_TO_CONST: dict[str, str] = {
     "fixed_tp_points": "FIXED_TP_POINTS",
     "trail_points": "TRAIL_POINTS",
     "hard_stop_points": "HARD_STOP_POINTS",
+    # P6-1: support snake_case grid keys (from yaml/tests) mapping to module UPPER
+    "trend_filter_enabled": "TREND_FILTER_ENABLED",
+    "trend_min_strength": "TREND_MIN_STRENGTH",
+    "trend_timeframe_min": "TREND_TIMEFRAME_MIN",
+    "trend_mode": "TREND_MODE",
+    "trend_ema_period": "TREND_EMA_PERIOD",
+    "trend_slope_min": "TREND_SLOPE_MIN",
 }
 
 
@@ -142,12 +156,24 @@ def patch_strategy_params(params: dict[str, Any]) -> Iterator[None]:
         restore_strategy_params(saved)
 
 
+def _normalize_sweep_key(k: str) -> str:
+    """Map snake_case grid key (e.g. from tests/yaml) to the module-level UPPER attr name."""
+    if k in SWEEP_FIELD_TO_CONST:
+        return SWEEP_FIELD_TO_CONST[k]
+    # Already UPPER or direct attr name
+    return k
+
+
 def apply_strategy_params(params: dict[str, Any]) -> dict[str, Any]:
-    """Apply params and return saved snapshot for manual restore."""
+    """Apply params and return saved snapshot for manual restore.
+    Accepts either UPPER_SNAKE module names or snake_case (mapped via SWEEP_FIELD_TO_CONST).
+    This fixes CAL-3 grid key casing issues while keeping setattr on the real config attrs.
+    """
     saved: dict[str, Any] = {}
     for key, value in params.items():
-        saved[key] = getattr(config, key, None)
-        setattr(config, key, value)
+        real_key = _normalize_sweep_key(key)
+        saved[real_key] = getattr(config, real_key, getattr(config, key, None))
+        setattr(config, real_key, value)
     return saved
 
 

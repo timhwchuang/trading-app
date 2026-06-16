@@ -113,7 +113,6 @@ def compute_trend_veto_calibration(
     allowed_audits: Iterable[Any] | None = None,
     *,
     get_forward_pnl: Callable[[float, int], float] | None = None,
-    default_window: int = 30,
 ) -> dict[str, Any]:
     """Core harness: conditional expectation of the trend veto.
 
@@ -121,7 +120,7 @@ def compute_trend_veto_calibration(
     allowed_audits: records that passed (no veto). If None, we can only compute stats on vetoed side.
     get_forward_pnl(price, idx) -> float: signed PnL if entered at that point. The caller **must**
         supply a policy (fixed window, to session flatten, or replay-derived). If None we use a
-        dead 0.0 toy (explicitly not for calibration).
+        dead 0.0 toy (explicitly not for calibration). (Removed unused default_window param.)
 
     Returns dict with:
       veto_rate, n_veto, n_allowed, mean_forward_if_vetoed, mean_forward_allowed,

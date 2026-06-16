@@ -104,6 +104,7 @@ from config import (
     VWAP_WINDOW_MIN,
     settings,
 )
+import config as _config  # for live reads of sweep-patched values (e.g. TREND_* in refresh_atr)
 
 from runtime.logging_setup import setup_async_logging, shutdown_async_logging
 
@@ -412,7 +413,13 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
                 end=today.isoformat(),
             )
             atr = IndicatorState.compute_atr(kbars)
-            if TREND_FILTER_ENABLED:
+            # Use _config.ATTR (live attribute lookup) for TREND_* so that sweep's
+            # setattr(config, 'TREND_...', val) is observed at runtime inside refresh_atr.
+            # The top-level "from config import TREND_..." is a snapshot at import time
+            # and would otherwise cause stale values (inconsistent with StrategyParams
+            # properties and vwap_momentum runtime reads).
+            _live_trend_enabled = getattr(_config, "TREND_FILTER_ENABLED", TREND_FILTER_ENABLED)
+            if _live_trend_enabled:
                 closes = list(getattr(kbars, "Close", []) or [])
                 trend_closes = closes
                 if used_long:
@@ -429,11 +436,11 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
                     ) or closes
                 trend_dir, trend_strength = compute_trend(
                     trend_closes,
-                    mode=TREND_MODE,
-                    timeframe_min=TREND_TIMEFRAME_MIN,
-                    ema_period=TREND_EMA_PERIOD,
-                    slope_min=TREND_SLOPE_MIN,
-                    min_strength=TREND_MIN_STRENGTH,
+                    mode=getattr(_config, "TREND_MODE", TREND_MODE),
+                    timeframe_min=getattr(_config, "TREND_TIMEFRAME_MIN", TREND_TIMEFRAME_MIN),
+                    ema_period=getattr(_config, "TREND_EMA_PERIOD", TREND_EMA_PERIOD),
+                    slope_min=getattr(_config, "TREND_SLOPE_MIN", TREND_SLOPE_MIN),
+                    min_strength=getattr(_config, "TREND_MIN_STRENGTH", TREND_MIN_STRENGTH),
                     atr=atr,  # for ATR-normalized min_strength gating (A from review)
                 )
             else:

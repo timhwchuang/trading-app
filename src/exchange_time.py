@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import datetime
 from collections import OrderedDict
+from typing import Any
 
 TAIWAN_TZ = datetime.timezone(datetime.timedelta(hours=8))
 
