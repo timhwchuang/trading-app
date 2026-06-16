@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from strategy_phase6 import (
+from strategy.phase6 import (
     compute_trend,
     dynamic_atr_based,
     dynamic_trail_points,

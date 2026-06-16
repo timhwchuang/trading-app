@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import unittest
 
-from performance_metrics import (
+from reporting.performance_metrics import (
     FrictionSettings,
     aggregate_daily_performance,
     compute_drawdown,
@@ -17,7 +17,7 @@ from performance_metrics import (
     friction_per_round_trip,
     sweep_score_from_kpi,
 )
-from uat_report import compute_metrics, format_report
+from reporting.uat_report import compute_metrics, format_report
 
 
 class TestPerformanceMetrics(unittest.TestCase):

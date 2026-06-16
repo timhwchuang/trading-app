@@ -8,8 +8,8 @@ import datetime
 import logging
 from pathlib import Path
 
-from data_loader import DEFAULT_CACHE_DIR
-from tick_archiver import gzip_csv_file
+from storage.tick_loader import DEFAULT_CACHE_DIR
+from storage.tick_archiver import gzip_csv_file
 
 logger = logging.getLogger(__name__)
 

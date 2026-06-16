@@ -1,7 +1,7 @@
 # Micro TAIEX VWAP 策略：UAT 回測規格書（同構性 / 確定性 / 啟發式執行）
 
-> 本文件已對照實際專案（`src/man.py:VWAPMomentumStrategy`、`src/observability.py`、
-> `src/exchange_time.py`、`src/config.py`、`src/uat_report.py`）與 Shioaji `_core.pyi` 修訂。
+> 本文件已對照實際專案（`src/runtime/engine.py:TradingEngine`、`src/strategy/`、
+> `src/observability.py`、`src/exchange_time.py`、`src/config.py`、`src/reporting/uat_report.py`）與 Shioaji `_core.pyi` 修訂。
 > 目標：在 UAT 期間能用歷史 tick 重放回測本策略，產出與生產環境 **語意一致** 的
 > KPI（進場轉換率、秒停損率、滑價、期望值），作為進 Pilot 前的相對調參工具。
 

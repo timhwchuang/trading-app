@@ -8,12 +8,12 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from backtester import BacktestEngine
+from backtest.engine import BacktestEngine
 from config import SWEEP_DD_PENALTY, SWEEP_SCORE_METRIC, SWEEP_SL_PENALTY
-from data_loader import DEFAULT_CACHE_DIR
-from determinism_check import _AuditCaptureHandler
-from performance_metrics import aggregate_daily_performance, sweep_score_from_kpi
-from strategy_config import (
+from storage.tick_loader import DEFAULT_CACHE_DIR
+from sweep.determinism_check import _AuditCaptureHandler
+from reporting.performance_metrics import aggregate_daily_performance, sweep_score_from_kpi
+from strategy.params import (
     apply_strategy_params,
     restore_strategy_params,
 )
@@ -31,7 +31,7 @@ def _run_backtest_summaries(
     cache_dir: Path,
 ) -> list[dict[str, Any]]:
     handler = _AuditCaptureHandler()
-    strategy_logger = logging.getLogger("man")
+    strategy_logger = logging.getLogger("theman")
     prev_level = strategy_logger.level
     strategy_logger.addHandler(handler)
     strategy_logger.setLevel(logging.INFO)

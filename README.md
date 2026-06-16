@@ -67,10 +67,29 @@ $env:LOG_LEVEL = "INFO"
 
 ```powershell
 .\.venv\Scripts\activate
-python src\man.py
+cd src
+python -m live
 ```
 
-（`python src\man.py` 會自動把 `src/` 加入 import path；若從其他入口 import 模組，可另設 `$env:PYTHONPATH = "src"`。）
+（從專案根目錄亦可：`$env:PYTHONPATH = "src"; python -m live`。）
+
+### 子系統 CLI（`cd src` 或 `PYTHONPATH=src`）
+
+| 用途 | 指令 |
+| ---- | ---- |
+| Live 交易 | `python -m live` |
+| 回測 | `python -m backtest --code TXFR1 --dates 2026-01-02` |
+| UAT 報告 | `python -m reporting log1.log log2.log` |
+| 壓縮 tick 快取 | `python -m storage.compress` |
+
+### 已移除的舊入口（改用模組路徑）
+
+| 舊指令 | 新指令 |
+| ------ | ------ |
+| `python src\man.py` | `cd src; python -m live` |
+| `python src\backtester.py` | `python -m backtest` |
+| `python src\uat_report.py` | `python -m reporting` |
+| `python src\compress_tick_cache.py` | `python -m storage.compress` |
 
 首次請確認 `config/config.yaml` 中 `simulation: true`，通過 UAT 後再改為 `false`。
 
@@ -81,9 +100,14 @@ python src\man.py
 | 檔案                    | 說明                                             |
 | ----------------------- | ------------------------------------------------ |
 | `config/config.yaml`    | 策略參數、交易時段、開盤量能階梯（**不含密鑰**） |
-| `src/config.py`         | YAML 載入器；`man.py` 啟動時自動讀取             |
+| `src/config.py`         | YAML 載入器                                    |
+| `src/runtime/`          | 狀態機、下單、session（`TradingEngine`）       |
+| `src/strategy/`         | VWAP momentum 策略邏輯                         |
+| `src/storage/`          | tick/kbar 快取與 live 落盤                       |
+| `src/backtest/`         | 回測引擎與 mock broker                         |
+| `src/reporting/`        | UAT 報告與績效指標                             |
 
-修改參數後**重啟程式**即可，無需改 `src/man.py`。
+修改參數後**重啟程式**即可，無需改策略程式碼。
 
 ---
 

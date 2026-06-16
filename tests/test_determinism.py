@@ -11,16 +11,18 @@ from pathlib import Path
 from unittest.mock import patch
 
 from config import MIN_ATR_THRESHOLD
-from data_loader import KBarRecord, ReplayTick, kbars_cache_path, save_kbars_csv
-from determinism_check import (
+from storage.kbar_loader import KBarRecord, kbars_cache_path, save_kbars_csv
+from storage.tick_loader import ReplayTick
+from sweep.determinism_check import (
     canonical_audit_json,
     capture_backtest_log_lines,
     hash_audit_lines,
     hash_audit_records,
     run_hash,
 )
-from man import OrderSignal, VWAPMomentumStrategy
-from uat_report import compute_metrics
+from core.types import OrderSignal
+from runtime.engine import VWAPMomentumStrategy
+from reporting.uat_report import compute_metrics
 
 
 def _session_ticks() -> list[ReplayTick]:
@@ -91,7 +93,7 @@ class TestDeterminism(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             cache_dir = Path(tmp)
-            with patch("backtester.iter_replay_ticks", fake_replay):
+            with patch("backtest.replay.iter_replay_ticks", fake_replay):
                 hashes = [run_hash("TXFR1", [date], cache_dir=cache_dir) for _ in range(3)]
         self.assertEqual(hashes[0], hashes[1])
         self.assertEqual(hashes[1], hashes[2])
@@ -106,7 +108,7 @@ class TestDeterminism(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             cache_dir = Path(tmp)
-            with patch("backtester.iter_replay_ticks", fake_replay):
+            with patch("backtest.replay.iter_replay_ticks", fake_replay):
                 with patch.object(
                     VWAPMomentumStrategy,
                     "process_strategy",
@@ -136,14 +138,14 @@ class TestDeterminism(unittest.TestCase):
 
         def emit_with_bonus(self, trade_date):
             original_emit(self, trade_date)
-            logging.getLogger("man").info(
+            logging.getLogger("theman").info(
                 "DAILY_SUMMARY %s",
                 json.dumps({"date": str(trade_date), "bonus": 1}),
             )
 
         with tempfile.TemporaryDirectory() as tmp:
             cache_dir = Path(tmp)
-            with patch("backtester.iter_replay_ticks", fake_replay):
+            with patch("backtest.replay.iter_replay_ticks", fake_replay):
                 base_hash = run_hash("TXFR1", [date], cache_dir=cache_dir)
                 with patch.object(
                     VWAPMomentumStrategy, "_emit_daily_summary", emit_with_bonus
@@ -200,7 +202,7 @@ class TestDeterminism(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             cache_dir = Path(tmp)
             _seed_kbars_cache(cache_dir)
-            with patch("backtester.iter_replay_ticks", fake_replay):
+            with patch("backtest.replay.iter_replay_ticks", fake_replay):
                 with patch.object(
                     VWAPMomentumStrategy,
                     "process_strategy",
@@ -237,7 +239,7 @@ class TestDeterminism(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             cache_dir = Path(tmp)
             _seed_kbars_cache(cache_dir)
-            with patch("backtester.iter_replay_ticks", fake_replay):
+            with patch("backtest.replay.iter_replay_ticks", fake_replay):
                 with patch.object(
                     VWAPMomentumStrategy,
                     "process_strategy",

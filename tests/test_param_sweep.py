@@ -1,4 +1,4 @@
-"""Phase 5 + 6.6: Parameter sweep and man-namespace patch tests."""
+"""Phase 5 + 6.6: Parameter sweep and config patch tests."""
 
 from __future__ import annotations
 
@@ -9,16 +9,15 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import config
-import man
-from data_loader import ReplayTick
+from storage.tick_loader import ReplayTick
 from observability import build_config_snapshot
-from param_sweep import (
+from sweep.param_sweep import (
     _apply_params,
     _restore_params,
     _run_backtest_summaries,
     sweep,
 )
-from man import VWAPMomentumStrategy
+from runtime.engine import VWAPMomentumStrategy
 
 
 class TestParamSweep(unittest.TestCase):
@@ -36,7 +35,7 @@ class TestParamSweep(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as tmp:
             cache_dir = Path(tmp)
-            with patch("backtester.iter_replay_ticks", fake_replay):
+            with patch("backtest.replay.iter_replay_ticks", fake_replay):
                 results = sweep(
                     grid,
                     dates_train=[datetime.date(2026, 6, 12)],
@@ -53,11 +52,9 @@ class TestParamSweep(unittest.TestCase):
         self.assertEqual(scores, sorted(scores, reverse=True))
 
     def test_config_restored(self):
-        original_man = man.ENTRY_BAND_POINTS
         original_cfg = config.ENTRY_BAND_POINTS
         saved = _apply_params({"ENTRY_BAND_POINTS": 99.0})
         _restore_params(saved)
-        self.assertEqual(man.ENTRY_BAND_POINTS, original_man)
         self.assertEqual(config.ENTRY_BAND_POINTS, original_cfg)
 
     def test_daily_summary_params_match_sweep(self):
@@ -73,7 +70,7 @@ class TestParamSweep(unittest.TestCase):
             self.assertEqual(build_config_snapshot()["entry_band_points"], 42.0)
             with tempfile.TemporaryDirectory() as tmp:
                 cache_dir = Path(tmp)
-                with patch("backtester.iter_replay_ticks", fake_replay):
+                with patch("backtest.replay.iter_replay_ticks", fake_replay):
                     summaries = _run_backtest_summaries(
                         "TXFR1",
                         [datetime.date(2026, 6, 12)],
@@ -86,8 +83,8 @@ class TestParamSweep(unittest.TestCase):
         finally:
             _restore_params(saved)
 
-    def test_man_namespace_patched(self):
-        original = man.ENTRY_BAND_POINTS
+    def test_sweep_params_affect_entry(self):
+        original = config.ENTRY_BAND_POINTS
         saved = _apply_params({"ENTRY_BAND_POINTS": 7.5})
         try:
             strategy = VWAPMomentumStrategy(api=MagicMock())
@@ -103,13 +100,13 @@ class TestParamSweep(unittest.TestCase):
             strategy.consecutive_loss = 0
             strategy.last_exit_time = 0
             dt = datetime.datetime(2026, 6, 12, 10, 0, 0)
-            self.assertEqual(man.ENTRY_BAND_POINTS, 7.5)
+            self.assertEqual(config.ENTRY_BAND_POINTS, 7.5)
             signal = strategy.process_strategy(1000, 18000.0, dt)
             self.assertIsNotNone(signal)
             self.assertEqual(signal.intent, "entry")
         finally:
             _restore_params(saved)
-        self.assertEqual(man.ENTRY_BAND_POINTS, original)
+        self.assertEqual(config.ENTRY_BAND_POINTS, original)
 
 
 if __name__ == "__main__":

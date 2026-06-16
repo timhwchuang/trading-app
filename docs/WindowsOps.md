@@ -52,7 +52,7 @@ cd C:\theman
 ### 方案 B：NSSM 服務（Pilot 可選）
 
 1. 下載 [NSSM](https://nssm.cc/) 並加入 PATH
-2. `nssm install theman "C:\theman\.venv\Scripts\python.exe" "C:\theman\src\man.py"`
+2. `nssm install theman "C:\theman\.venv\Scripts\python.exe" "-m" "live"`
 3. 設定 `AppDirectory=C:\theman\src`；Environment 加入 API keys
 
 ### 手動啟動（開發 / 除錯）
@@ -65,7 +65,8 @@ cd C:\theman
 
 ```powershell
 # 壓縮昨日 tick（預設排除當日進行中檔）
-.\.venv\Scripts\python.exe .\src\compress_tick_cache.py
+cd src
+.\.venv\Scripts\python.exe -m storage.compress
 ```
 
 建議工作排程器每日 **15:30** 執行。

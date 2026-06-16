@@ -6,10 +6,10 @@ import datetime
 from typing import List
 
 from config import ATR_REFRESH_SEC, SESSION_END, SESSION_START
-from data_loader import DEFAULT_CACHE_DIR, iter_replay_ticks
 from exchange_time import is_trading_session
-from man import VWAPMomentumStrategy
-from mock_broker import MockBroker
+from runtime.engine import VWAPMomentumStrategy
+from backtest.mock_broker import MockBroker
+from storage.tick_loader import DEFAULT_CACHE_DIR
 
 
 class VirtualClock:
@@ -53,6 +53,8 @@ class BacktestEngine:
         self.cache_dir = cache_dir
 
     def run(self) -> None:
+        from backtest.replay import iter_replay_ticks
+
         for tick in iter_replay_ticks(self.code, self.dates, cache_dir=self.cache_dir):
             self.clock.set(tick.datetime.timestamp())
             self.broker.current_dt = tick.datetime

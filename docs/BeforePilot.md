@@ -13,13 +13,13 @@
 
 ```bash
 # 單日完整報告（含調參提示）
-python src/uat_report.py /path/to/theman-uat.log
+cd src && python -m reporting /path/to/theman-uat.log
 
 # JSON 輸出（餵給 AI）
-python src/uat_report.py /path/to/theman-uat.log --json
+cd src && python -m reporting /path/to/theman-uat.log --json
 
 # 多日趨勢（合併輪替 log 或 grep DAILY_SUMMARY）
-python src/uat_report.py day1.log day2.log day3.log --trend
+cd src && python -m reporting day1.log day2.log day3.log --trend
 ```
 
 秒停損率與停損分布（進入 Pilot 的硬指標）

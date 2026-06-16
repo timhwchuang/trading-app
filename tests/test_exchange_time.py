@@ -71,7 +71,7 @@ class TestCooldownUsesExchangeTs(unittest.TestCase):
         self.assertNotEqual(strategy.last_exit_time, int(__import__("time").time()))
 
     def test_cooldown_blocks_until_exchange_ts_elapsed(self):
-        from man import COOLDOWN_SEC
+        from config import COOLDOWN_SEC
 
         strategy = make_strategy()
         exit_ts = 1_700_000_000

@@ -11,7 +11,8 @@ import shioaji as sj
 from shioaji import OrderState
 
 from config import MOMENTUM_VOL_1S, SESSION_FORCE_FLATTEN_TIME
-from data_loader import DEFAULT_CACHE_DIR, iter_kbars_in_range
+from storage.tick_loader import DEFAULT_CACHE_DIR
+from storage.kbar_loader import iter_kbars_in_range
 from exchange_time import is_at_or_after
 
 

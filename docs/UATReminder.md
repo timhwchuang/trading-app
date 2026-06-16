@@ -20,7 +20,8 @@ $env:TICK_ARCHIVE = "1"
 # 選配：kbars 落盤（ATR / 趨勢濾網回測熱身，P0-11 follow-up）
 $env:KBARS_ARCHIVE = "1"
 $env:DUMP_ORDER_EVENTS = "1"
-python src\man.py
+cd src
+python -m live
 ```
 
 - [x] **P0-11** 已實作；`TICK_ARCHIVE=1` 盤中寫入 `tick_cache/*.csv`；log 見 `Tick 落盤已啟用`
@@ -34,21 +35,22 @@ python src\man.py
 ### UAT 第一天（必做）
 
 1. `TICK_ARCHIVE=1` 跑滿交易時段 → 盤中確認 `tick_cache/{code}_{date}.csv` 持續增長；確認 tick 欄位（`close` / `bid_price` / `ask_price`）與落盤 CSV 一致
-2. 收盤後：`python src\compress_tick_cache.py`（**預設排除當日**；僅壓歷史 plain 檔）→ 確認 `*.csv.gz` 可 `iter_replay_ticks` 重放
+2. 收盤後：`cd src; python -m storage.compress`（**預設排除當日**；僅壓歷史 plain 檔）→ 確認 `*.csv.gz` 可 `iter_replay_ticks` 重放
 3. `DUMP_ORDER_EVENTS=1` 跑一筆委託/成交 → 搜尋 `RAW_ORDER_EVT` 確認欄位名（P0-9）
 4. 確認啟動無 `無期貨帳號` 錯誤（P0-10）
-5. 收盤後：`python src\uat_report.py C:\logs\theman-uat.log`（P2-7；含 **生存指標** 區塊，績效僅供觀測、非 UAT gate）
+5. 收盤後：`cd src; python -m reporting C:\logs\theman-uat.log`（P2-7；含 **生存指標** 區塊，績效僅供觀測、非 UAT gate）
 
 ### 收盤後 tick 壓縮（工作排程器建議 15:30 / 16:00）
 
 ```powershell
 cd C:\path\to\theman
 .\.venv\Scripts\activate
-python src\compress_tick_cache.py
+cd src
+python -m storage.compress
 ```
 
 - 預設**跳過當日**進行中 `.csv`（防 Linux/開發機誤壓；Windows 上亦更安全）
-- 若要強制壓當日檔（通常不需要）：`python src\compress_tick_cache.py --include-today`
+- 若要強制壓當日檔（通常不需要）：`cd src; python -m storage.compress --include-today`
 - 跨日 rotate（程式仍在跑）會自動 gzip **昨日**檔；排程器補 crash 未 rotate 的歷史檔
 
 ---

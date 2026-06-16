@@ -75,7 +75,7 @@ class TestSignalAudit(unittest.TestCase):
     def test_format_is_valid_json(self):
         import json
 
-        from signal_audit import SignalAudit, format_signal_audit
+        from core.audit.signal_audit import SignalAudit, format_signal_audit
 
         raw = format_signal_audit(
             SignalAudit(

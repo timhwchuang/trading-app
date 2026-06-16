@@ -10,8 +10,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from compress_tick_cache import compress_tick_cache
-from data_loader import (
+from storage.compress import compress_tick_cache
+from storage.tick_loader import (
     ReplayTick,
     cache_path,
     iter_replay_ticks,
@@ -19,7 +19,7 @@ from data_loader import (
     resolve_tick_cache_path,
     save_ticks_csv,
 )
-from tick_archiver import TickArchiveRecord, TickArchiver, gzip_csv_file
+from storage.tick_archiver import TickArchiveRecord, TickArchiver, gzip_csv_file
 
 
 def _record(

@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from data_loader import (
+from storage.tick_loader import (
     ReplayTick,
     _ns_to_taipei_naive,
     cache_path,

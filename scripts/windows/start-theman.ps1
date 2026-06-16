@@ -5,14 +5,14 @@ param(
 
 $ErrorActionPreference = "Stop"
 $venvPython = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
-$manScript = Join-Path $ProjectRoot "src\man.py"
+$srcDir = Join-Path $ProjectRoot "src"
 
 if (-not (Test-Path $venvPython)) {
     throw "找不到 venv Python: $venvPython"
 }
-if (-not (Test-Path $manScript)) {
-    throw "找不到 man.py: $manScript"
+if (-not (Test-Path $srcDir)) {
+    throw "找不到 src 目錄: $srcDir"
 }
 
-Set-Location (Join-Path $ProjectRoot "src")
-& $venvPython $manScript
+Set-Location $srcDir
+& $venvPython -m live

@@ -8,8 +8,8 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from data_loader import load_kbars_csv
-from kbar_archiver import archive_kbars_snapshot
+from storage.kbar_loader import load_kbars_csv
+from storage.kbar_archiver import archive_kbars_snapshot
 
 
 class TestKbarArchiver(unittest.TestCase):

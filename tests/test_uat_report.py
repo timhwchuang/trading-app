@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import unittest
 
-from uat_report import (
+from reporting.uat_report import (
     build_tuning_hints,
     compute_metrics,
     format_report,

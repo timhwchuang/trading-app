@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
-from data_loader import DEFAULT_CACHE_DIR, TICK_CSV_FIELDS, cache_path
+from storage.tick_loader import DEFAULT_CACHE_DIR, TICK_CSV_FIELDS, cache_path
 
 logger = logging.getLogger(__name__)
 

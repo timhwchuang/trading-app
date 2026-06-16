@@ -8,8 +8,8 @@ import logging
 from pathlib import Path
 from typing import Iterable, List
 
-from backtester import BacktestEngine
-from data_loader import DEFAULT_CACHE_DIR
+from backtest.engine import BacktestEngine
+from storage.tick_loader import DEFAULT_CACHE_DIR
 
 _AUDIT_PREFIXES = ("SIGNAL_AUDIT ", "FILL_AUDIT ", "DAILY_SUMMARY ")
 _NON_DETERMINISTIC_OPERATIONAL_KEYS = frozenset(
@@ -84,7 +84,7 @@ def run_hash(
 ) -> str:
     """Run one backtest and hash SIGNAL_AUDIT + FILL_AUDIT + DAILY_SUMMARY JSON."""
     handler = _AuditCaptureHandler()
-    strategy_logger = logging.getLogger("man")
+    strategy_logger = logging.getLogger("theman")
     prev_level = strategy_logger.level
     strategy_logger.addHandler(handler)
     strategy_logger.setLevel(logging.INFO)
@@ -104,7 +104,7 @@ def capture_backtest_log_lines(
 ) -> list[str]:
     """Return uat_report-compatible log lines from a backtest run."""
     handler = _AuditCaptureHandler()
-    strategy_logger = logging.getLogger("man")
+    strategy_logger = logging.getLogger("theman")
     prev_level = strategy_logger.level
     strategy_logger.addHandler(handler)
     strategy_logger.setLevel(logging.INFO)

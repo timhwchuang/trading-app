@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping
 
 from config import settings
-from performance_metrics import (
+from reporting.performance_metrics import (
     aggregate_daily_performance,
     compute_performance_from_fills,
     friction_settings_from_mapping,
@@ -89,7 +89,7 @@ class NearMissTracker:
     ) -> None:
         """Classify pullback ticks that did NOT fire entry.
 
-        Aligns with man.py: entry requires ``near_vwap and vol_dried_up`` where
+        Aligns with original (flat man.py) semantics: entry requires ``near_vwap and vol_dried_up`` where
         ``vol_dried_up`` means ``vol_1s <= EXHAUSTION_VOL`` (volume exhausted /
         dried up — a pass, not a rejection).
 
@@ -389,7 +389,7 @@ class DailyObservability:
 def build_config_snapshot() -> dict[str, Any]:
     """Strategy params at summary time — Settings + live module constants for sweep."""
     import config as cfg
-    from strategy_config import SWEEP_FIELD_TO_CONST
+    from strategy.params import SWEEP_FIELD_TO_CONST
 
     snap = asdict(cfg.settings)
     snap.pop("config_path", None)

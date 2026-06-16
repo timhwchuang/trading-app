@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from man import VWAPMomentumStrategy
+from runtime.engine import VWAPMomentumStrategy
 
 
 def make_strategy() -> VWAPMomentumStrategy:

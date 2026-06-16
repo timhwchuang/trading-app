@@ -90,7 +90,7 @@ class TestAtrKlineStart(unittest.TestCase):
     def test_long_lookback_when_atr_zero(self):
         import datetime
 
-        from man import VWAPMomentumStrategy
+        from runtime.engine import VWAPMomentumStrategy
 
         today = datetime.date(2026, 6, 10)
         start, used_long = VWAPMomentumStrategy._atr_kline_start(
@@ -105,7 +105,7 @@ class TestAtrKlineStart(unittest.TestCase):
     def test_intraday_when_atr_ready(self):
         import datetime
 
-        from man import VWAPMomentumStrategy
+        from runtime.engine import VWAPMomentumStrategy
 
         today = datetime.date(2026, 6, 10)
         start, used_long = VWAPMomentumStrategy._atr_kline_start(
@@ -166,7 +166,7 @@ class TestRawOrderEventDump(unittest.TestCase):
         strategy = make_strategy()
         msg = {"price": "18000", "quantity": 1, "action": "Buy"}
 
-        with patch("man.DUMP_ORDER_EVENTS", True):
+        with patch("config.DUMP_ORDER_EVENTS", True):
             with self.assertLogs("man", level="INFO") as logs:
                 strategy.handle_order_event(OrderState.FuturesDeal, msg)
                 strategy.handle_order_event(OrderState.FuturesDeal, msg)

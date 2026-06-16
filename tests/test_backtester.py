@@ -7,8 +7,8 @@ import unittest
 from unittest.mock import patch
 
 from config import PENDING_TIMEOUT_SEC
-from data_loader import ReplayTick
-from backtester import BacktestEngine
+from storage.tick_loader import ReplayTick
+from backtest.engine import BacktestEngine
 
 
 class TestBacktestEngine(unittest.TestCase):
@@ -22,7 +22,7 @@ class TestBacktestEngine(unittest.TestCase):
             ReplayTick(datetime.datetime(2026, 6, 12, 9, 0, 1), "18001", 1, 0),
         ]
         engine = BacktestEngine("TXFR1", [datetime.date(2026, 6, 12)])
-        with patch("backtester.iter_replay_ticks", return_value=iter(ticks)):
+        with patch("backtest.replay.iter_replay_ticks", return_value=iter(ticks)):
             engine.run()
         self.assertEqual(
             engine.clock(), ticks[-1].datetime.timestamp()
@@ -51,7 +51,7 @@ class TestBacktestEngine(unittest.TestCase):
             engine.strategy.pending_intent = "entry"
             yield tick2
 
-        with patch("backtester.iter_replay_ticks", fake_replay):
+        with patch("backtest.replay.iter_replay_ticks", fake_replay):
             engine.run()
 
         self.assertGreater(t1.timestamp() - t0.timestamp(), PENDING_TIMEOUT_SEC)
@@ -73,7 +73,7 @@ class TestBacktestEngine(unittest.TestCase):
             return original_on_tick(tick)
 
         engine.strategy.on_tick = track
-        with patch("backtester.iter_replay_ticks", return_value=iter(ticks)):
+        with patch("backtest.replay.iter_replay_ticks", return_value=iter(ticks)):
             engine.run()
         self.assertEqual(len(seen), 1)
         self.assertEqual(seen[0].time(), datetime.time(8, 46))
@@ -120,7 +120,7 @@ class TestBacktestEngine(unittest.TestCase):
         def fake_replay(_code, _dates, cache_dir=None):
             yield premarket_tick
 
-        with patch("backtester.iter_replay_ticks", fake_replay):
+        with patch("backtest.replay.iter_replay_ticks", fake_replay):
             engine.run()
 
         deals = [e for e in events if e[0] == OrderState.FuturesDeal]

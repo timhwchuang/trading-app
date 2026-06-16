@@ -10,8 +10,9 @@ import shioaji as sj
 from shioaji import OrderState
 
 from config import MOMENTUM_VOL_1S
-from data_loader import KBarRecord, ReplayTick, save_kbars_csv
-from mock_broker import MockBroker
+from storage.kbar_loader import KBarRecord, save_kbars_csv
+from storage.tick_loader import ReplayTick
+from backtest.mock_broker import MockBroker
 from test_helpers import make_strategy
 
 
@@ -181,7 +182,7 @@ class TestMockBrokerMatching(unittest.TestCase):
                     100,
                 ),
             ]
-            from data_loader import kbars_cache_path
+            from storage.kbar_loader import kbars_cache_path
 
             save_kbars_csv(bars, kbars_cache_path(cache_dir, code, day))
             broker = MockBroker(clock=lambda: 0.0, cache_dir=cache_dir)
@@ -227,7 +228,7 @@ class TestMockBrokerMatching(unittest.TestCase):
             code = "TXFR1"
             prev = datetime.date(2026, 6, 11)
             today = datetime.date(2026, 6, 12)
-            from data_loader import kbars_cache_path
+            from storage.kbar_loader import kbars_cache_path
 
             prev_bars = [
                 KBarRecord(

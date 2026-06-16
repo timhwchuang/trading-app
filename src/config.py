@@ -211,7 +211,7 @@ def load_config(path: str | Path | None = None) -> Settings:
     )
 
 
-# 模組載入時讀取一次；man.py 以同名常數 re-export
+# 模組載入時讀取一次；runtime 以同名常數使用
 settings = load_config()
 
 SIMULATION = settings.simulation
