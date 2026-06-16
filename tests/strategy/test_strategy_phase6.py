@@ -92,6 +92,7 @@ class TestStrategyPhase6(unittest.TestCase):
 import datetime
 
 from strategy.base import BaseStrategy, StrategySideEffects
+from tests.test_helpers import make_host
 from storage.tick_loader import ReplayTick
 from unittest.mock import MagicMock
 
@@ -107,8 +108,6 @@ class _DummyStrategy(BaseStrategy):
 
 class TestStrategyInterfaceInjection(unittest.TestCase):
     def test_make_strategy_accepts_custom_decision_strategy(self):
-        from tests.test_helpers import make_host
-
         dummy = _DummyStrategy()
         host = make_host(decision=dummy)
 

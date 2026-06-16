@@ -5,12 +5,11 @@ from __future__ import annotations
 import unittest
 
 from config import EXIT_GRACE_SEC, EXIT_GRACE_TICKS, HARD_STOP_POINTS, VWAP_STOP_POINTS
+from tests.test_helpers import make_host
 
 
 class TestExitGracePeriod(unittest.TestCase):
     def _long_strategy(self):
-        from tests.test_helpers import make_host
-
         host = make_host()
         host.has_position = True
         host.position_dir = "Long"
@@ -64,8 +63,6 @@ class TestExitGracePeriod(unittest.TestCase):
         self.assertIsNone(signal)
 
     def test_short_in_grace_vwap_stop_suppressed(self):
-        from tests.test_helpers import make_host
-
         host = make_host()
         host.has_position = True
         host.position_dir = "Short"

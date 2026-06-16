@@ -139,7 +139,7 @@ python -m live
 ├── config/          # 設定檔（config.yaml）
 ├── docs/            # 設計、UAT、Code Review 文件
 ├── src/             # 核心源碼（策略、回測、工具）
-├── tests/           # 單元測試（已鏡射 src/ 結構：backtest/、runtime/、storage/、sweep/ 等子資料夾）
+├── tests/           # 單元測試（已鏡射 src/ 結構：backtest/、runtime/、storage/、strategy/、sweep/、reporting/；詳見 run_tests.py 內 maintenance note）
 ├── README.md
 ├── TODO.md
 └── requirements.txt

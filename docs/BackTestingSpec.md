@@ -540,7 +540,7 @@ if half_spread is not None:
 
 ## 總驗收清單（Definition of Done）
 
-* [x] 每個 Phase 的 `tests/test_*.py` 全部通過；`python run_tests.py` 全綠（**139** 項）。
+* [x] 每個 Phase 的 `tests/**/test_*.py` 全部通過；`python run_tests.py` 全綠（**139** 項）。
 * [x] 回測 log 能直接被 `uat_report.py` 解析，指標語意與實盤一致。
 * [x] 同資料連跑 3 次 SHA-256 一致（含**有 K 線 + 有 FILL** 路徑，7.6）。
 * [x] 決策邏輯在 `src/strategy/`（回測僅注入 `_maybe_refresh_atr` no-op）。
@@ -567,8 +567,8 @@ if half_spread is not None:
 * **注入**：`TradingEngine(strategy=...)`、`BacktestEngine(..., strategy=...)`。
 * **命名**：執行宿主 = `TradingEngine` / `BacktestEngine.host`；**勿**使用已移除的
   `VWAPMomentumStrategy = TradingEngine` 別名。
-* **測試**：`test_strategy_phase6.py`（constructor 注入 + one-tick survive）；
-  `test_helpers.make_host()` 建立 mock 宿主。
+* **測試**：`tests/strategy/test_strategy_phase6.py`（constructor 注入 + one-tick survive）；
+  `tests.test_helpers.make_host()` 建立 mock 宿主。
 * **驗收**：自訂 `BaseStrategy` 子類注入後，`host.on_tick(tick)` 不拋 `AttributeError`。
 
 分支：`fix/strategy-interface-honesty` → merge 至 `main`。

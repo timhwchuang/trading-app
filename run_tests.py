@@ -24,6 +24,12 @@ if str(_SRC) not in sys.path:
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+# Maintenance note (for future src/ changes):
+# When adding a new package under src/ (e.g. src/foo/), create the mirror
+# tests/foo/ (with __init__.py) and move or add the corresponding test_*.py there.
+# Keep test_helpers.py and tests for top-level src/*.py modules at tests/ root.
+# Always verify with `python run_tests.py` after structural changes.
+
 if __name__ == "__main__":
     raise SystemExit(
         unittest.main(
