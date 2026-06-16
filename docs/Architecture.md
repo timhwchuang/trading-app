@@ -33,7 +33,7 @@
 - ✅ **Strategy plugin**：`strategy-vwap-momentum`（entry point `vwap_momentum`）
 - ✅ **Backtest**：`trading-backtest`；app 的 `backtest/engine.py` 薄 wrapper 注入 `trading_app_engine_ports`
 - ✅ **接線**：`integrations/engine_wiring.py` → `trading_app_engine_ports()` + `load_named_strategy()`
-- 🔜 **CI remote**：GitHub 僅 checkout theman 時需 submodule 或發布 PyPI；本地 monorepo 用 `scripts/ci-setup.sh`。
+- ✅ **CI remote**：`requirements.txt` git pin（`trading-engine@v0.2.0`、`trading-backtest@v0.1.1`、`strategy-vwap-momentum@v0.1.1`）；本地 monorepo 用 `scripts/ci-setup.sh` 或 `pip install -e ../`。
 
 ### 刻意保留（下一輪窄縫）
 
@@ -52,6 +52,6 @@
 ## 時序與相容性原則
 
 - 任何新縫以**可選參數 + 安全預設**加入；`make_host` 簽名維持相容。
-- `python run_tests.py` 每次須全綠（基線 **155**）；回測 SIGNAL_AUDIT / FILL_AUDIT / DAILY_SUMMARY 與最終 host 狀態須與重構前一致。
+- `python run_tests.py` 每次須全綠（trading-app 基線 **69**；siblings 各自維護）；回測 SIGNAL_AUDIT / FILL_AUDIT / DAILY_SUMMARY 與最終 host 狀態須與重構前一致。
 - live 入口（`python -m live`）行為不變。
 - package 搬移（`src/trading_engine/`）延後到出現第二個 app/strategy 才動；先以 `__init__` re-export 取得多數好處。

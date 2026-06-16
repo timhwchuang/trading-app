@@ -13,10 +13,10 @@
 
 ```bash
 # 單日完整報告（含調參提示）
-cd src && python -m reporting /path/to/theman-uat.log
+cd src && python -m reporting /path/to/trading-app-uat.log
 
 # JSON 輸出（餵給 AI）
-cd src && python -m reporting /path/to/theman-uat.log --json
+cd src && python -m reporting /path/to/trading-app-uat.log --json
 
 # 多日趨勢（合併輪替 log 或 grep DAILY_SUMMARY）
 cd src && python -m reporting day1.log day2.log day3.log --trend

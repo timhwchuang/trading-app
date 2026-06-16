@@ -1,4 +1,18 @@
-# Release checklist — trading-app v0.1.0
+# Release checklist — trading-app
+
+Use this before tagging a release on GitHub.
+
+## v0.1.1 — completed 2026-06-16
+
+- [x] Sibling tags: `trading-backtest@v0.1.1`, `strategy-vwap-momentum@v0.1.1`
+- [x] `python run_tests.py` — 69 OK (app); siblings 27 + 31 OK
+- [x] Remove `theman_*` aliases; ops docs → `trading-app`
+- [x] `requirements.txt` pins `@v0.1.1`
+- [x] `git push origin main && git push origin v0.1.1`
+
+---
+
+## v0.1.0 — reference (completed 2026-06-16)
 
 Use this before tagging `v0.1.0` on GitHub.
 

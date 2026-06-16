@@ -38,7 +38,7 @@ python -m live
 2. 收盤後：`cd src; python -m storage.compress`（**預設排除當日**；僅壓歷史 plain 檔）→ 確認 `*.csv.gz` 可 `iter_replay_ticks` 重放
 3. `DUMP_ORDER_EVENTS=1` 跑一筆委託/成交 → 搜尋 `RAW_ORDER_EVT` 確認欄位名（P0-9）
 4. 確認啟動無 `無期貨帳號` 錯誤（P0-10）
-5. 收盤後：`cd src; python -m reporting C:\logs\theman-uat.log`（P2-7；含 **生存指標** 區塊，績效僅供觀測、非 UAT gate）
+5. 收盤後：`cd src; python -m reporting C:\logs\trading-app-uat.log`（P2-7；含 **生存指標** 區塊，績效僅供觀測、非 UAT gate）
 
 ### 收盤後 tick 壓縮（工作排程器建議 15:30 / 16:00）
 

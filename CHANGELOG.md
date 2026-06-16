@@ -12,6 +12,7 @@ Versioning follows [SemVer](https://semver.org/) (0.x = API may still evolve).
 - Alert prefix `[theman]` → `[trading-app]`
 - Windows ops: `start-trading-app.ps1`, `register-task.ps1` default task `trading-app-vwap`
 - Pin siblings: `trading-backtest@v0.1.1`, `strategy-vwap-momentum@v0.1.1`
+- Docs sync: `TODO.md`, `WeeklyStatus.md`, `README.md`, `docs/*` ops paths
 
 ### Fixed
 

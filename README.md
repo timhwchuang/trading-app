@@ -11,11 +11,11 @@
 | [docs/Architecture.md](docs/Architecture.md) | 與三 sibling repo 的架構對照 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本變更 |
 
-**Sibling packages** (pin for v0.1.0):
+**Sibling packages** (pin for v0.1.1):
 
 - [trading-engine](https://github.com/timhwchuang/trading-engine) `@ v0.2.0`
-- [trading-backtest](https://github.com/timhwchuang/trading-backtest) `@ v0.1.0`
-- [strategy-vwap-momentum](https://github.com/timhwchuang/strategy-vwap-momentum) `@ v0.1.0`
+- [trading-backtest](https://github.com/timhwchuang/trading-backtest) `@ v0.1.1`
+- [strategy-vwap-momentum](https://github.com/timhwchuang/strategy-vwap-momentum) `@ v0.1.1`
 
 ---
 
@@ -88,6 +88,7 @@ trading-app/
 │   ├── storage/             # tick/kbar 落盤
 │   ├── reporting/           # uat_report、績效指標
 │   └── sweep/               # 參數研究
+├── scripts/windows/         # start-trading-app.ps1、register-task.ps1
 ├── tests/                   # integration tests (~69)
 ├── pyproject.toml
 └── requirements.txt

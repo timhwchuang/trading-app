@@ -20,12 +20,13 @@
 | [`CodeReview#1`～`#3`](.)                                  | 歷史 code review（含重構前 `man.py` 行號） |
 | [`CodeReview#BackTesting.md`](CodeReview%23BackTesting.md) | 回測專項 review（歷史）                    |
 
-## 現行架構速查（2026-06-16）
+## 現行架構速查（2026-06-16，v0.1.1）
 
-- **執行宿主**：`src/runtime/engine.py` → `TradingEngine`
-- **回測**：`src/backtest/engine.py` → `BacktestEngine.host`
-- **決策 plugin**：`src/strategy/`（預設 `VWAPMomentumStrategy`）
-- **契約**：`src/strategy/base.py` → `Strategy` / `BaseStrategy`；`src/core/ports.py` → `BrokerPort`（券商縫）
-- **趨勢濾網 / 校準**：`src/strategy/trend.py`；`src/reporting/trend_calibration.py`（P6-1-CAL harness）
-- **測試**：`python run_tests.py`（**155** 項）；mock 宿主 `tests/test_helpers.make_host()`
-- **CI**：`.github/workflows/ci.yml`（ubuntu + `run_tests.py`）
+- **執行宿主**：`trading-engine` → `TradingEngine`
+- **回測**：`trading-backtest`；app 薄層 `src/backtest/engine.py` 注入 `trading_app_engine_ports()`
+- **決策 plugin**：`strategy-vwap-momentum`（預設 `VWAPMomentumStrategy`）
+- **接線**：`src/integrations/engine_wiring.py` → `trading_app_engine_ports()`
+- **趨勢濾網 / 校準**：plugin `trend.py`；`src/reporting/trend_calibration.py`（P6-1-CAL harness）
+- **測試**：`python run_tests.py`（trading-app **69** 項）；siblings 各自 `run_tests.py`；mock 宿主 `tests/test_helpers.make_host()`
+- **CI**：`.github/workflows/ci.yml`（ubuntu + `run_tests.py` + git-tagged siblings）
+- **發布**：[`releases/v0.1.1.md`](releases/v0.1.1.md)

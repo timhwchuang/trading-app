@@ -55,22 +55,23 @@
 ## 2. 專案結構（現況）
 
 ```
-theman/
+trading-app/                 # reference integrator（v0.1.1）
 ├── config/config.yaml       # 策略參數（yaml；密鑰走 env）
 ├── src/
-│   ├── config.py            # YAML 載入
-│   ├── exchange_time.py     # 交易所時間 helper
-│   ├── core/                # types、audit（SignalAudit）
-│   ├── runtime/             # TradingEngine（執行宿主）
-│   ├── strategy/            # Strategy interface + VWAPMomentumStrategy
-│   ├── storage/             # tick/kbar 快取、落盤、ReplayTick
-│   ├── backtest/            # BacktestEngine、MockBroker
-│   ├── reporting/           # uat_report
-│   ├── sweep/               # param_sweep、determinism_check
+│   ├── integrations/        # trading_app_engine_ports()
 │   ├── live/                # `python -m live` 入口
-│   └── observability.py     # FILL_AUDIT / DAILY_SUMMARY
-├── tests/                   # `python run_tests.py`（155 項）
+│   ├── backtest/engine.py   # 薄 wrapper → trading_backtest
+│   ├── storage/             # tick/kbar 落盤
+│   ├── reporting/           # uat_report、績效指標
+│   ├── sweep/               # param_sweep、determinism_check
+│   └── config.py 等         # app 設定、觀測
+├── tests/                   # `python run_tests.py`（69 項整合測試）
 └── tick_cache/              # UAT / 回測 tick CSV 快取
+
+# Sibling packages（pip install -e ../ 或 requirements.txt git pin）
+trading-engine/              # TradingEngine、Strategy Protocol
+trading-backtest/            # BacktestEngine、MockBroker、replay
+strategy-vwap-momentum/      # VWAPMomentumStrategy plugin
 ```
 
 > 舊 monolith `man.py` / `backtester.py` 已拆包；入口見 [`README.md`](../README.md)。

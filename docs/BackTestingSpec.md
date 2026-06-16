@@ -4,8 +4,8 @@
 > 能照本規格實作，**不需自行做架構決策**。每個 Phase 都有：要建立的檔案、精確函式
 > 簽名、輸入/輸出、邊界情況、以及「驗收條件 + 具體測試案例與預期數值」。
 >
-> **2026-06-16 現況**：Phase 2–7 **均已落地**；決策邏輯在 `src/strategy/`，執行宿主為
-> `runtime.TradingEngine`；回測包裝為 `backtest.BacktestEngine`（`.host` 屬性）。
+> **2026-06-16 現況（v0.1.1）**：Phase 2–7 **均已落地**；決策邏輯在 `strategy-vwap-momentum`，
+> 執行宿主為 `trading-engine.TradingEngine`；回測在 `trading-backtest`（app 薄層注入 ports）。
 > 歷史段落中若出現 `man.py` / `backtester.py`，僅作重構前脈絡，以本文件「檔案對照表」為準。
 >
 > 黃金鐵律（違反即視為實作失敗）：
@@ -16,7 +16,7 @@
 >    * `host._maybe_refresh_atr`（回測改 no-op；ATR 改由引擎同步刷新，見 7.1）
 > 3. 不可引入 `pandas` / `numpy`，只用 Python 標準庫。
 > 4. 不可使用 `time.time()` / `datetime.now()` / `date.today()`。時間一律來自 `tick.datetime`。
-> 5. `python run_tests.py` 必須全綠（目前 **155** 項）。
+> 5. `python run_tests.py` 必須全綠（trading-app **69** 項；siblings 各自維護）。
 
 ---
 
@@ -542,7 +542,7 @@ if half_spread is not None:
 
 ## 總驗收清單（Definition of Done）
 
-* [x] 每個 Phase 的 `tests/**/test_*.py` 全部通過；`python run_tests.py` 全綠（**155** 項）。
+* [x] 每個 Phase 的 `tests/**/test_*.py` 全部通過；`python run_tests.py` 全綠（trading-app **69** 項；歷史 monolith 基線曾為 155）。
 * [x] 回測 log 能直接被 `uat_report.py` 解析，指標語意與實盤一致。
 * [x] 同資料連跑 3 次 SHA-256 一致（含**有 K 線 + 有 FILL** 路徑，7.6）。
 * [x] 決策邏輯在 `src/strategy/`（回測僅注入 `_maybe_refresh_atr` no-op）。
@@ -609,7 +609,7 @@ if half_spread is not None:
    - 決策必須有**可追溯的 harness + sweep 報表 + WeeklyStatus 紀錄**；禁止「看起來不錯就開」。
 
 ### 驗收條件（A-class 已完成，B-class 待 UAT）
-- A-class：`tests/reporting/test_trend_calibration.py` 5 項全綠；`tests/sweep/test_param_sweep.py` 新增 trend grid 案例含 `veto_metrics` key；`python run_tests.py` 全綠（155+）。
+- A-class：`tests/reporting/test_trend_calibration.py` 5 項全綠；`tests/sweep/test_param_sweep.py` 新增 trend grid 案例含 `veto_metrics` key；`python run_tests.py` 全綠（現行 trading-app 69 項）。
 - 無任何地方把 `trend_filter_enabled` 設 true 或 `min_strength>0` 作為預設/測試行為。
 - 文件同步：本節 + TODO.md 目前狀態 + `trend.py` / `config.yaml` 語意說明（effective scale + 0.0 最嚴格警告）。
 - B-class 後：真實 UAT log 跑 harness 產出有意義的 sensitivity 表 + delta 穩定性；人類簽核後才改 config 並 re-sweep。

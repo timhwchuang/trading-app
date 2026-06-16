@@ -18,15 +18,15 @@ _None._
 
 1. ~~**Local folder still `theman/`**~~ — **Resolved** (renamed to `trading-app/`; pushed to GitHub).
 
-2. **strategy-vwap-momentum `trend_dir` fix** — Patched locally in monorepo (`strategy.py` `_try_pullback_entry`). Published git tag `v0.1.0` may still lack fix until `v0.1.1` tag. trading-app CI installs from git tag — verify tag includes fix or bump pin.
+2. ~~**strategy-vwap-momentum `trend_dir` fix**~~ — **Resolved in v0.1.1** (`strategy-vwap-momentum@v0.1.1` tagged and pinned).
 
-3. **MockBroker string close** — `trading-backtest` v0.1.0 compares `tick.close` without `float()`. Sweep tests use numeric close via `_tick_helpers.py`. Real CSV replay (string close) may hit same issue in live backtest — follow-up in `trading-backtest`.
+3. ~~**MockBroker string close**~~ — **Resolved in v0.1.1** (`trading-backtest@v0.1.1` tagged and pinned).
 
 ## Low severity
 
-1. **Deprecated aliases** — `theman_engine_ports`, `ThemanTelemetryPort`, etc. kept one cycle. Remove in v0.2.0.
+1. ~~**Deprecated aliases**~~ — **Resolved in v0.1.1** (`theman_*` removed; use `trading_app_*` only).
 
-2. **Docs drift** — `TODO.md`, `WeeklyStatus.md`, historical CodeReview files still mention theman heavily. Non-blocking for tag; batch update post-UAT.
+2. ~~**Docs drift**~~ — **Resolved in v0.1.1** (`TODO.md`, `WeeklyStatus.md`, `README.md`, ops docs synced; historical CodeReview files retain `theman` as archive).
 
 3. **`reporting/contract.py` split** — Deferred; `uat_report.py` imports `SignalAudit` from `trading_engine` directly (acceptable).
 
@@ -41,8 +41,9 @@ _None._
 
 ## Tag recommendation
 
-Proceed with `v0.1.0` after:
+~~Proceed with `v0.1.0` after:~~
 
-1. Push `strategy-vwap-momentum` patch as `v0.1.1` (or cherry-pick into existing tag before push)
-2. Rename local directory `theman` → `trading-app` when IDE releases lock
+1. ~~Push `strategy-vwap-momentum` patch as `v0.1.1`~~ — **Done** (2026-06-16).
+2. ~~Rename local directory `theman` → `trading-app`~~ — **Done**.
 3. ~~`git push origin main && git push origin v0.1.0`~~ — **Done** (2026-06-16).
+4. **v0.1.1 follow-up** — **Done** (2026-06-16): sibling bugfixes + alias removal + docs sync; see [`releases/v0.1.1.md`](releases/v0.1.1.md).

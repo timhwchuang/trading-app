@@ -42,8 +42,30 @@
 | **Pilot 門檻** | UAT 全過 + CA + `simulation: false`；**P2-7 秒停損率**為硬指標。 |
 | **AGENTS.md 生產指引** | ✅ 已擴充：AI 安全護欄、Production Gate、工程品質、已知限制、運維 runbook。 |
 | **Cursor / Grok 強制合規** | ✅ `.cursor/rules/*.mdc`（`alwaysApply`）+ `.grok/settings.json`；見 `AGENTS.md` 開頭「AI 工具強制合規」。 |
+| **三 repo 發布** | ✅ `trading-engine@v0.2.0`、`trading-backtest@v0.1.1`、`strategy-vwap-momentum@v0.1.1`、`trading-app@v0.1.1` 已 push GitHub。 |
+| **UAT blocker** | **待永豐模擬 API 金鑰**（0 權限）；KEY 到手前僅做不需連線的修復與文件同步。 |
 
 ---
+
+### 2026-06-16（v0.1.1 — UAT 等待期修復 + 文件同步）
+
+**目前進度**
+- **Sibling bugfix**：`trading-backtest@v0.1.1` — `MockBroker` 對 CSV `str` close 做 `float()`；`strategy-vwap-momentum@v0.1.1` — `_try_pullback_entry` 補 `trend_dir`（修 `NameError`）。
+- **trading-app@v0.1.1**：移除 `theman_*` deprecated aliases；告警前綴 `[trading-app]`；`requirements.txt` pin 升至 `@v0.1.1`。
+- **Windows ops**：`start-trading-app.ps1`、`register-task.ps1`（預設 `trading-app-vwap`）；`WindowsOps.md` / `AGENTS.md` / `README.md` / `TODO.md` 路徑與測試基線同步。
+- 測試全綠：backtest **27**、strategy **31**、trading-app **69**。
+
+**人類必做（Follow-up）**
+- [ ] 申請永豐模擬 API 金鑰（行情 + 帳務 + 交易；UAT 不需 CA）
+- [ ] KEY 到手後依 [`UATReminder.md`](UATReminder.md) 啟動：`simulation: true`、`TICK_ARCHIVE=1`、`KBARS_ARCHIVE=1`
+- [ ] UAT 機部署：`git clone` + `pip install -r requirements.txt`（或 monorepo `-e ../`）
+
+**Pending / 待決策**
+- `.cursor/rules/theman-*.mdc` 檔名仍保留（內容有效）；可下一批 rename → `trading-app-*.mdc`
+- B 類 P6-1-CAL（6～8）仍待 UAT tick 累積
+
+**備註 / 開發日記**
+- v0.1.0 code review 列的 docs drift / sibling bugfix 已在本批收尾；歷史 CodeReview 檔保留 `theman` 脈絡不動。
 
 ---
 
