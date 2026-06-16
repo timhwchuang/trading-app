@@ -38,34 +38,48 @@
 * **交易所時間驅動（P0-6）**：所有時段 / cooldown / 開盤量能階梯由 `tick.datetime`
   驅動（見 `exchange_time.py`，naive datetime 視為台北本地時間）。
 
+### 1.1 宿主 vs 策略（Phase 7）
+
+| 元件 | 路徑 | 職責 |
+|------|------|------|
+| **執行宿主** | `runtime.TradingEngine` | 狀態機、下單、session、indicators、locks |
+| **回測宿主** | `backtest.BacktestEngine.host` | 同上（`api=MockBroker`、`clock=VirtualClock`） |
+| **決策 plugin** | `strategy.*`（預設 `VWAPMomentumStrategy`） | `evaluate` / `manage_exit` / momentum / audit |
+| **契約** | `strategy.base.Strategy` | 建構子 `TradingEngine(strategy=MyPlugin())` 注入 |
+
+回測與實盤共用同一份 **宿主 + 同一份 decision plugin**；回測只替換 `api` / `clock` /
+`_maybe_refresh_atr` 等外部縫。
+
 ---
 
-## 2. 專案結構（現況，非重寫）
+## 2. 專案結構（現況）
 
 ```
 theman/
-├── config/config.yaml   # 策略參數（yaml；密鑰走 env）
+├── config/config.yaml       # 策略參數（yaml；密鑰走 env）
 ├── src/
-│   ├── config.py        # 參數快照（yaml + 環境變數）
-│   ├── exchange_time.py # 交易所時間 helper（純函式，實盤回測共用）
-│   ├── signal_audit.py  # SIGNAL_AUDIT dataclass
-│   ├── observability.py # FILL_AUDIT / DAILY_SUMMARY / near-miss（實盤回測共用）
-│   ├── man.py           # 策略狀態機 + 實盤進入點（api/clock 可注入）
-│   ├── data_loader.py   # ★ Phase 0：歷史 tick 抓取 + 本地 CSV 快取
-│   ├── backtester.py    # Phase 2：單執行緒 tick 重放引擎
-│   └── uat_report.py    # 日終指標解析（實盤回測共用）
-├── tests/               # 單元測試（`python run_tests.py`）
-└── tick_cache/          # 回測 tick CSV 快取（專案根目錄）
+│   ├── config.py            # YAML 載入
+│   ├── exchange_time.py     # 交易所時間 helper
+│   ├── core/                # types、audit（SignalAudit）
+│   ├── runtime/             # TradingEngine（執行宿主）
+│   ├── strategy/            # Strategy interface + VWAPMomentumStrategy
+│   ├── storage/             # tick/kbar 快取、落盤、ReplayTick
+│   ├── backtest/            # BacktestEngine、MockBroker
+│   ├── reporting/           # uat_report
+│   ├── sweep/               # param_sweep、determinism_check
+│   ├── live/                # `python -m live` 入口
+│   └── observability.py     # FILL_AUDIT / DAILY_SUMMARY
+├── tests/                   # `python run_tests.py`（139 項）
+└── tick_cache/              # UAT / 回測 tick CSV 快取
 ```
 
-> 不採用 big-bang 改寫成 `strategy.py` / `interfaces.py`。利用已存在的 `api`/`clock`
-> 注入縫即可達成同構回測，風險最低。
+> 舊 monolith `man.py` / `backtester.py` 已拆包；入口見 [`README.md`](../README.md)。
 
 ---
 
 ## 3. Shioaji 歷史資料能力與限制（券商面）
 
-實作參考 `data_loader.py`。對照 `_core.pyi`：
+實作參考 `storage/tick_loader.py`。對照 Shioaji `_core.pyi`：
 
 * **`api.ticks(contract, date, query_type=AllDay|RangeTime|LastCount)`** 回傳 `Ticks`：
   `ts`(奈秒 epoch)、`close`、`volume`、`bid_price`/`bid_volume`、
@@ -75,7 +89,7 @@ theman/
   * 只能抓**過去日期**；受 `usage().limit_bytes` 流量配額限制。
   * 歷史 `Ticks` **無 `simtrade` 旗標**（試搓單過濾僅適用即時串流）。
 * **策略**：一次性下載 → 本地 CSV 快取（`tick_cache/<code>_<date>.csv`）。回測一律
-  讀快取，**不**每次打 API。`data_loader.download_and_cache` 抓取前後記錄
+  讀快取，**不**每次打 API。`storage.tick_loader.download_and_cache` 抓取前後記錄
   `api.usage()`，剩餘 < 10% 告警。
 
 ### ⚠️ bid/ask 同構性紀律（重要）
@@ -92,7 +106,7 @@ theman/
 
 ## 4. `ReplayTick` 與 `TickFOPv1` 同構
 
-`data_loader.ReplayTick` 提供策略 `_parse_tick` 會用到的屬性：
+`storage.tick_loader.ReplayTick` 提供宿主 `_parse_tick` 會用到的屬性：
 
 | 屬性 | 型別 | 說明 |
 |---|---|---|
@@ -104,25 +118,25 @@ theman/
 
 ---
 
-## 5. 回測引擎 `backtester.py`（Phase 2，待實作）
+## 5. 回測引擎 `backtest.BacktestEngine`（Phase 2，✅ 已落地）
 
-單執行緒、確定性。主迴圈：
+單執行緒、確定性。`BacktestEngine` 持有 `self.host`（`TradingEngine` 實例）與
+`MockBroker`。主迴圈（見 `backtest/engine.py`）：
 
 ```
-for tick in data_loader.iter_replay_ticks(code, dates):
-    clock.set(tick.datetime.timestamp())   # 推進虛擬時鐘
-    strategy.on_tick(tick)                  # 同一份決策邏輯
-    mock_broker.process_matching_queue(tick, strategy)  # 撮合 in-flight 委託
-    strategy._check_pending_timeout()       # 同一份超時邏輯，由虛擬時鐘驅動
+for tick in storage.tick_loader.iter_replay_ticks(code, dates):
+    clock.set(tick.datetime.timestamp())
+    broker.current_dt = tick.datetime
+    broker.process_matching_queue(tick, host)   # 撮合先於 timeout（7.2/7.3）
+    host._check_pending_timeout()
+    if is_trading_session(...):
+        _pre_tick_refresh_atr(host, ts)           # 同步 ATR（7.1）
+        host.on_tick(tick)
 ```
 
-* **時鐘**：注入 `clock`（可變的 callable，回測中回傳當前 tick epoch 秒）。策略內
-  所有 `self._clock()` 因此被 tick 時間驅動，無 `time.time()` 洩漏。
-* **超時邏輯共用**：呼叫策略既有的 `_check_pending_timeout`，**不**在回測重寫一份。
-* **成交回報走同一條路**：MockBroker 撮合後，組出與 Shioaji 同構的 deal dict，餵回
-  `strategy.handle_order_event(OrderState.FuturesDeal, msg)` →
-  既有 `_handle_futures_deal` → 既有 `_apply_deal_fill`。FILL_AUDIT / DAILY_SUMMARY
-  因此自動產生，無需在回測另寫。
+* **時鐘**：注入 `clock`；宿主內 `self._clock()` 由 tick 時間驅動。
+* **決策 plugin**：`BacktestEngine(..., strategy=MyPlugin())` 可選；預設 VWAP。
+* **成交回報**：MockBroker 撮合後餵 `host.handle_order_event` → 既有 fill 路徑。
 
 ### 5.1 啟發式撮合模型（MockBroker）
 
@@ -177,10 +191,12 @@ for tick in data_loader.iter_replay_ticks(code, dates):
 
 ## 8. 實作進度
 
-* [x] **Phase 0**：`data_loader.py`（歷史 tick 抓取 + CSV 快取 + 配額告警）。
-* [x] **Phase 1**：注入縫 —— `clock`（消除 `time.time()` 洩漏）、`_today()`
-  （消除 `date.today()` 洩漏）。
-* [ ] **Phase 2**：`backtester.py` 重放引擎（虛擬時鐘 + 同構 deal 回報）。
-* [ ] **Phase 3**：`MockBroker` 啟發式撮合（close 基準 + 延遲 + 滑價旋鈕）。
-* [ ] **Phase 4**：確定性閘門（3 次 SHA-256 一致）+ uat_report 語意比對。
-* [ ] **Phase 5**：AI 調參迴圈（參數掃描 + walk-forward）。
+* [x] **Phase 0**：`storage/tick_loader.py`（歷史 tick + CSV 快取 + 配額告警）。
+* [x] **Phase 1**：`clock` / `_today()` 注入縫。
+* [x] **Phase 2**：`backtest/engine.py`（`BacktestEngine` + `VirtualClock`）。
+* [x] **Phase 3**：`backtest/mock_broker.py` 啟發式撮合。
+* [x] **Phase 4**：`sweep/determinism_check.py` + 三跑 SHA-256 閘門。
+* [x] **Phase 5**：`sweep/param_sweep.py` + walk-forward 網格。
+* [x] **Phase 7**：`strategy.base.Strategy` + 建構子注入（見 §1.1）。
+
+詳細驗收與邊界案例見 [`BackTestingSpec.md`](BackTestingSpec.md)。

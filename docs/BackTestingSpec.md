@@ -1,19 +1,22 @@
-# 回測實作規格書（Phase 2-5）— 給實作模型的逐步指令
+# 回測實作規格書（Phase 2–7）— 給實作模型的逐步指令
 
 > 本文件是 `BackTesting.md` 的「可執行版」。目的：讓**任何模型（含較便宜的模型）**
 > 能照本規格實作，**不需自行做架構決策**。每個 Phase 都有：要建立的檔案、精確函式
 > 簽名、輸入/輸出、邊界情況、以及「驗收條件 + 具體測試案例與預期數值」。
 >
+> **2026-06-16 現況**：Phase 2–7 **均已落地**；決策邏輯在 `src/strategy/`，執行宿主為
+> `runtime.TradingEngine`；回測包裝為 `backtest.BacktestEngine`（`.host` 屬性）。
+> 歷史段落中若出現 `man.py` / `backtester.py`，僅作重構前脈絡，以本文件「檔案對照表」為準。
+>
 > 黃金鐵律（違反即視為實作失敗）：
-> 1. **絕對不可修改** `src/strategy/` 與 `src/runtime/` 的決策邏輯（`process_strategy` / `manage_exit` /
->    `update_vwap` / `update_momentum` / `_handle_futures_deal` / `_handle_futures_order`
->    / `_apply_deal_fill` / `_stop_loss_hit` / `_in_exit_grace_period`）。
-> 2. 回測只能**注入**外部依賴與**新增**檔案，允許的注入縫：
->    * `api`（=MockBroker）、`clock`（=VirtualClock）
->    * `strategy._maybe_refresh_atr`（回測改 no-op；ATR 改由引擎同步刷新，見 7.1）
+> 1. **決策邏輯**在 `src/strategy/`（`evaluate` / `manage_exit` 等）；**執行宿主**在
+>    `src/runtime/`（`process_strategy`、pending、fills、session）。回測不重寫決策。
+> 2. 回測只能**注入**外部依賴，允許的注入縫：
+>    * `api`（=MockBroker）、`clock`（=VirtualClock）、`strategy=`（決策 plugin）
+>    * `host._maybe_refresh_atr`（回測改 no-op；ATR 改由引擎同步刷新，見 7.1）
 > 3. 不可引入 `pandas` / `numpy`，只用 Python 標準庫。
 > 4. 不可使用 `time.time()` / `datetime.now()` / `date.today()`。時間一律來自 `tick.datetime`。
-> 5. 每個 Phase 完成後，`python run_tests.py` 必須全綠（目前 93 項）。
+> 5. `python run_tests.py` 必須全綠（目前 **139** 項）。
 
 ---
 
@@ -22,8 +25,9 @@
 `runtime.TradingEngine` 已具備：
 
 * 建構子：`TradingEngine(api=None, clock=None, strategy=None)`。
+  * `strategy`：決策 plugin（`Strategy`）；省略時預設 `VWAPMomentumStrategy`。
 * `on_tick(tick)`：`tick` 只需具備 `.datetime`(datetime, 台北 naive)、`.close`(str)、
-  `.volume`(int)、`.tick_type`(int)。`data_loader.ReplayTick` 已符合。
+  `.volume`(int)、`.tick_type`(int)。`storage.tick_loader.ReplayTick` 已符合。
 * `place_order(signal)`：內部建 `sj.FuturesOrder(..., account=self.api.futopt_account)`，
   呼叫 `self.api.place_order(contract, order, timeout=0)`，期待回傳物件有 `.order.id`。
   **已驗證 `account=None` 可正常建構。**
@@ -40,13 +44,14 @@
 * ATR：`on_tick` 每 `ATR_REFRESH_SEC` 秒觸發 `refresh_atr()` →
   `self.api.kbars(contract, start, end)`，期待回傳物件有 `.High`/`.Low`/`.Close`(list)。
 
-`data_loader.py` 已具備：`ReplayTick`、`iter_replay_ticks(code, dates, cache_dir=)`、
-`download_and_cache(...)`、`date_range(start, end)`、
-`download_and_cache_kbars(...)`、`load_kbars_csv(...)`、`iter_kbars_in_range(...)`。
+`storage/tick_loader.py` 已具備：`ReplayTick`、`iter_replay_ticks(code, dates, cache_dir=)`、
+`download_and_cache(...)`、`date_range(start, end)`；
+`storage/kbar_loader.py`：`download_and_cache_kbars(...)`、`load_kbars_csv(...)`、
+`iter_kbars_in_range(...)`。
 
 ---
 
-## Phase 2：重放引擎 `backtester.py`
+## Phase 2：重放引擎 `backtest/engine.py`
 
 ### 2.1 建立 `VirtualClock`
 
@@ -535,7 +540,7 @@ if half_spread is not None:
 
 ## 總驗收清單（Definition of Done）
 
-* [x] 每個 Phase 的 `tests/test_*.py` 全部通過；`python run_tests.py` 全綠（**93 項**，含既有 69 項）。
+* [x] 每個 Phase 的 `tests/test_*.py` 全部通過；`python run_tests.py` 全綠（**139** 項）。
 * [x] 回測 log 能直接被 `uat_report.py` 解析，指標語意與實盤一致。
 * [x] 同資料連跑 3 次 SHA-256 一致（含**有 K 線 + 有 FILL** 路徑，7.6）。
 * [x] 決策邏輯在 `src/strategy/`（回測僅注入 `_maybe_refresh_atr` no-op）。
@@ -548,23 +553,35 @@ if half_spread is not None:
 
 | Phase | 狀態 | 主要檔案 |
 |-------|------|----------|
-| 2 | ✅ | `backtester.py`, `test_backtester.py` |
-| 3 | ✅ | `mock_broker.py`, `test_mock_broker.py`, `data_loader.py`（kbars） |
-| 4 | ✅ | `determinism_check.py`, `test_determinism.py` |
-| 5 | ✅ | `param_sweep.py`, `test_param_sweep.py` |
-| 6 | ✅ | 穿價/timeout/試撮/hash/ATR熱身/bid-ask校準/三模組patch |
-| 7 | ✅ | Code Review 落地（見上） |
+| 2 | ✅ | `backtest/engine.py`, `tests/test_backtester.py` |
+| 3 | ✅ | `backtest/mock_broker.py`, `tests/test_mock_broker.py`, `storage/kbar_loader.py` |
+| 4 | ✅ | `sweep/determinism_check.py`, `tests/test_determinism.py` |
+| 5 | ✅ | `sweep/param_sweep.py`, `tests/test_param_sweep.py` |
+| 6 | ✅ | 穿價/timeout/試撮/hash/ATR熱身/bid-ask校準/StrategyParams sweep |
+| 7 | ✅ | `strategy/base.py`, `strategy/vwap_momentum.py`, `tests/test_strategy_phase6.py` |
 
-分支：`main`（含 Phase 2–7 回測與 Strategy interface 工作）。
+### Phase 7 — Strategy interface（2026-06-16）
+
+* **契約**：`strategy.base.Strategy` + `BaseStrategy`（momentum、`evaluate`、`reset`、
+  `manage_exit`、audit builders、`session_force_flatten_signal`）。
+* **注入**：`TradingEngine(strategy=...)`、`BacktestEngine(..., strategy=...)`。
+* **命名**：執行宿主 = `TradingEngine` / `BacktestEngine.host`；**勿**使用已移除的
+  `VWAPMomentumStrategy = TradingEngine` 別名。
+* **測試**：`test_strategy_phase6.py`（constructor 注入 + one-tick survive）；
+  `test_helpers.make_host()` 建立 mock 宿主。
+* **驗收**：自訂 `BaseStrategy` 子類注入後，`host.on_tick(tick)` 不拋 `AttributeError`。
+
+分支：`fix/strategy-interface-honesty` → merge 至 `main`。
 
 ---
 
 ## 給實作模型的執行順序
 
 1. Phase 3 `MockBroker` + `test_mock_broker.py`
-2. Phase 2 `backtester.py` + `test_backtester.py`（含 7.1 ATR 注入、7.2/7.3 迴圈順序）
+2. Phase 2 `backtest/engine.py` + `test_backtester.py`（含 7.1 ATR 注入、7.2/7.3 迴圈順序）
 3. 合成或真實 tick/kbar 快取煙霧測試
 4. Phase 4 確定性（含 7.5/7.6）
-5. Phase 5 參數掃描（含 7.7/7.8）
+5. Phase 5 參數掃描（含 StrategyParams / config patch）
+6. Phase 7 策略介面（可選 plugin；預設 VWAP 行為不變）
 
-每完成一步跑全測試，確認 `src/strategy/` 決策邏輯無非預期改動。
+每完成一步跑全測試（`python run_tests.py`）。

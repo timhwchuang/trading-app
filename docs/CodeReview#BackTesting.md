@@ -1,11 +1,14 @@
 # Code Review — 回測系統 Phase 2-5（依 `BackTestingSpec.md`）
 
+> **歷史文件（2026-06 前）**：下文 `man.py` / `backtester.py` 行號為 monolith 時期快照。
+> 現行架構見 [`BackTesting.md`](BackTesting.md) §2、[`README.md`](README.md)。
+
 > 審查範圍：`feat/backtest-phase3-mock-broker`（撮合核心）、`phase2-backtester`（重放迴圈）、
 > `phase4-determinism`（確定性閘門）、`phase5-param-sweep`（參數掃描）。四個分支為線性疊加，
 > HEAD = phase5 已含全部程式碼。
-> 審查方法：對照 Spec 黃金鐵律與驗收條件，逐檔讀 `mock_broker.py` / `backtester.py` /
-> `determinism_check.py` / `param_sweep.py` / `data_loader.py`，並回讀 `man.py` /
-> `observability.py` 驗證「同構性」與「確定性」是否真的成立。實測 `89 tests OK`。
+> 審查方法：對照 Spec 黃金鐵律與驗收條件，逐檔讀 `mock_broker.py` / `backtest/engine.py` /
+> `determinism_check.py` / `param_sweep.py` / `storage/tick_loader.py`，並回讀
+> `observability.py` 驗證「同構性」與「確定性」（重構前對應 `backtester.py` / `data_loader.py` / `man.py`）。
 
 ---
 

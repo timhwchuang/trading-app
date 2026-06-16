@@ -37,8 +37,40 @@
 | **回測 K 線（ATR）** | ✅ `KBARS_ARCHIVE=1` → `kbar_archiver.py` 寫 `tick_cache/{code}_kbars_{date}.csv`（`refresh_atr` 後）；UAT 建議一併開啟。 |
 | **Live 防護網** | ✅ P4-11 / P4-12 / P4-3 骨架已落地（單元測試）；Pilot 前手動斷網 / Telegram 實機驗收。 |
 | **Phase 6 骨架** | ✅ P6-6 生存指標 + P6-1～3 旗標預設關；**UAT 回測校準 k 後才開**。 |
+| **Phase 7 策略介面** | ✅ `Strategy` Protocol + 建構子注入；host=`TradingEngine`；預設 plugin=`VWAPMomentumStrategy`。 |
 | **Phase 3 UAT** | **可開跑**（待永豐模擬 API）；見 [`UATReminder.md`](UATReminder.md)。驗狀態機，不驗獲利。 |
 | **Pilot 門檻** | UAT 全過 + CA + `simulation: false`；**P2-7 秒停損率**為硬指標。 |
+
+---
+
+### 2026-06-16（週次 3 — Phase 7 Strategy Interface + CR 收尾）
+
+**目前進度**
+
+- **Phase 7** 策略介面誠實化：`strategy.base.Strategy` / `BaseStrategy`；`TradingEngine(strategy=...)` 與 `BacktestEngine(strategy=...)` 建構子注入。
+- 移除 `VWAPMomentumStrategy = TradingEngine` host 別名；**engine 叫 engine、strategy 叫 strategy**。
+- `BacktestEngine.host` 取代 `.strategy` 屬性（避免與注入的 decision plugin 混淆）。
+- Protocol 涵蓋 host 實際依賴面（momentum、`reset`、`manage_exit`、audit builders、session flatten）；非 VWAP plugin 可 survive one tick。
+- 文件同步：`BackTesting.md` / `BackTestingSpec.md` / `TODO.md`；CR nit（`make_host`、public audit API）已合入。
+- `python run_tests.py` **139** 項全綠；分支 `fix/strategy-interface-honesty`（待 merge → `main`）。
+
+**人類必做（Follow-up）**
+
+- [ ] **merge** `fix/strategy-interface-honesty` → `main`（CR OK）
+- [ ] **申請永豐模擬 API 金鑰**（行情/資料 + 帳務 + 交易）— 仍為 UAT 首要 blocker
+- [ ] Windows UAT 機：`TICK_ARCHIVE=1`、選配 `KBARS_ARCHIVE=1`
+- [ ] UAT 累積 tick 後：`param_sweep` / `uat_report` 校準 Phase 6 旗標
+
+**Pending / 待決策**
+
+- [ ] Phase 6 旗標何時開（須回測數據支撐）
+- [ ] 第二套 example strategy（驗證 plugin 故事；Phase 7 Next）
+- [ ] P6-4 / P6-5（Live 後段）
+
+**備註 / 開發日記**
+
+- 歷史 Code Review（`CodeReview#1`～`#3`、`CodeReview#BackTesting`）內 `man.py` 行號為重構前快照；現行對照見 [`BackTesting.md`](BackTesting.md) §2 與 [`AuditContract.md`](AuditContract.md)。
+- 預設決策仍為 VWAP；新策略須實作完整 `Strategy` contract（或繼承 `BaseStrategy`）。
 
 ---
 
