@@ -7,7 +7,8 @@
 | 文件 | 用途 |
 |------|------|
 | [SPEC.md](SPEC.md) | App 層邊界、依賴方向、公開 wiring API |
-| [docs/UATReminder.md](docs/UATReminder.md) | UAT 驗收步驟 |
+| [docs/UAT_CHECKLIST.md](docs/UAT_CHECKLIST.md) | App 層 UAT 執行清單 |
+| [docs/DOC_MAP.md](docs/DOC_MAP.md) | 文件職責分工 |
 | [docs/Architecture.md](docs/Architecture.md) | 與三 sibling repo 的架構對照 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本變更 |
 

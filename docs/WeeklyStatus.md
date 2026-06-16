@@ -38,12 +38,34 @@
 | **Live 防護網** | ✅ P4-11 / P4-12 / P4-3 骨架已落地（單元測試）；Pilot 前手動斷網 / Telegram 實機驗收。 |
 | **Phase 6 CAL** | ✅ P6-1-CAL **A 類 1～5 已 merge `main`**；B 類 6～8 待 UAT tick；旗標預設關。 |
 | **Phase 7 策略介面** | ✅ `Strategy` Protocol + 建構子注入；host=`TradingEngine`；預設 plugin=`VWAPMomentumStrategy`。 |
-| **Phase 3 UAT** | **可開跑**（待永豐模擬 API）；見 [`UATReminder.md`](UATReminder.md)。驗狀態機，不驗獲利。 |
+| **Phase 3 UAT** | **可開跑**（待永豐模擬 API）；見 [`UAT_CHECKLIST.md`](UAT_CHECKLIST.md)。驗狀態機，不驗獲利。 |
 | **Pilot 門檻** | UAT 全過 + CA + `simulation: false`；**P2-7 秒停損率**為硬指標。 |
 | **AGENTS.md 生產指引** | ✅ 已擴充：AI 安全護欄、Production Gate、工程品質、已知限制、運維 runbook。 |
 | **Cursor / Grok 強制合規** | ✅ `.cursor/rules/*.mdc`（`alwaysApply`）+ `.grok/settings.json`；見 `AGENTS.md` 開頭「AI 工具強制合規」。 |
 | **三 repo 發布** | ✅ `trading-engine@v0.2.0`、`trading-backtest@v0.1.1`、`strategy-vwap-momentum@v0.1.1`、`trading-app@v0.1.1` 已 push GitHub。 |
 | **UAT blocker** | **待永豐模擬 API 金鑰**（0 權限）；KEY 到手前僅做不需連線的修復與文件同步。 |
+
+---
+
+### 2026-06-16（文件重構 — TODO 瘦身 + UAT 職責拆分）
+
+**目前進度**
+- **TODO.md**：897 行 → ~80 行路線圖（狀態表 + Open items）；歷史 Phase 細節移除（見 git log）。
+- **UAT**：`UATReminder.md` 移除 → 新建 `docs/UAT_CHECKLIST.md`（app 部署）；kernel 場景引用 `trading-engine/docs/UAT_CHECKLIST.md`。
+- **DOC_MAP.md**：釐清 TODO / WeeklyStatus / UAT_CHECKLIST / RELEASE_CHECKLIST 職責。
+- **CodeReview / Phase8 spec**：自 repo 刪除（已在 GitHub 歷史）。
+- **theman 清除**：cursor rules 改名 `trading-app-*.mdc`、`.grok/settings.json`、`start-theman.ps1` 刪除。
+
+**人類必做（Follow-up）**
+- [ ] 申請永豐模擬 API
+- [ ] KEY 到手後跑 `docs/UAT_CHECKLIST.md` Phase A→E
+
+**Pending / 待決策**
+- `BackTestingSpec.md` 標 archive；完整搬移到 sibling 可 UAT 後再做
+- `WeeklyStatus.md` 舊節（下方）含歷史脈絡，**以本節為準**
+
+**備註**
+- 下方舊週報保留交接脈絡；出現舊路徑名請忽略。
 
 ---
 
@@ -57,15 +79,15 @@
 
 **人類必做（Follow-up）**
 - [ ] 申請永豐模擬 API 金鑰（行情 + 帳務 + 交易；UAT 不需 CA）
-- [ ] KEY 到手後依 [`UATReminder.md`](UATReminder.md) 啟動：`simulation: true`、`TICK_ARCHIVE=1`、`KBARS_ARCHIVE=1`
+- [ ] KEY 到手後依 [`UAT_CHECKLIST.md`](UAT_CHECKLIST.md) 啟動：`simulation: true`、`TICK_ARCHIVE=1`、`KBARS_ARCHIVE=1`
 - [ ] UAT 機部署：`git clone` + `pip install -r requirements.txt`（或 monorepo `-e ../`）
 
 **Pending / 待決策**
-- `.cursor/rules/theman-*.mdc` 檔名仍保留（內容有效）；可下一批 rename → `trading-app-*.mdc`
+- ~~`.cursor/rules/theman-*.mdc`~~ → 已改名 `trading-app-*.mdc`
 - B 類 P6-1-CAL（6～8）仍待 UAT tick 累積
 
 **備註 / 開發日記**
-- v0.1.0 code review 列的 docs drift / sibling bugfix 已在本批收尾；歷史 CodeReview 檔保留 `theman` 脈絡不動。
+- v0.1.0 code review 列的 docs drift / sibling bugfix 已在本批收尾。
 
 ---
 
@@ -295,8 +317,8 @@
 **人類必做（Follow-up）**
 
 - [ ] **申請永豐模擬 API 金鑰**（行情/資料 + 帳務 + 交易）
-- [ ] **Windows UAT 機**：`TICK_ARCHIVE=1`、選配 `KBARS_ARCHIVE=1`、`LOG_FILE=C:\logs\theman-uat.log`
-- [ ] API 到手後 **UAT Day 1**（見 [`UATReminder.md`](UATReminder.md)）
+- [ ] **Windows UAT 機**：`TICK_ARCHIVE=1`、選配 `KBARS_ARCHIVE=1`、`LOG_FILE=C:\logs\trading-app-uat.log`
+- [ ] API 到手後 **UAT Day 1**（見 [`UAT_CHECKLIST.md`](UAT_CHECKLIST.md)）
 - [ ] 累積 2～4 週 tick 後：`uat_report.py` 看 **生存指標（net）** + `param_sweep` 校準 Phase 6 參數
 - [ ] Pilot 前：Telegram 告警實機測試、手動斷網驗 P4-12
 
@@ -323,7 +345,7 @@
 **人類必做（Follow-up）**
 
 - [ ] **申請永豐模擬 API 金鑰**（行情/資料 + 帳務 + 交易）
-- [ ] **準備 Windows UAT 機**：venv、`SJ_API_KEY` / `SJ_SEC_KEY`、`LOG_FILE=C:\logs\theman-uat.log`、`TICK_ARCHIVE=1`
+- [ ] **準備 Windows UAT 機**：venv、`SJ_API_KEY` / `SJ_SEC_KEY`、`LOG_FILE=C:\logs\trading-app-uat.log`、`TICK_ARCHIVE=1`
 - [ ] API 到手後 **UAT Day 1**：`DUMP_ORDER_EVENTS=1` + 跑滿交易時段驗 tick 落盤與委託欄位
 - [ ] 收盤後工作排程器：`python src\compress_tick_cache.py`（預設排除當日；不需 `--exclude-today`）
 
@@ -351,7 +373,7 @@
 **人類必做（Follow-up）**
 
 - [ ] **申請永豐模擬 API 金鑰**（行情/資料 + 帳務 + 交易；先不勾正式環境）
-- [ ] **準備 Windows UAT 機**：venv、`SJ_API_KEY` / `SJ_SEC_KEY`、`LOG_FILE=C:\logs\theman-uat.log`、`config/config.yaml` → `simulation: true`
+- [ ] **準備 Windows UAT 機**：venv、`SJ_API_KEY` / `SJ_SEC_KEY`、`LOG_FILE=C:\logs\trading-app-uat.log`、`config/config.yaml` → `simulation: true`
 - [ ] API 到手後：**第一個交易日** 設 `DUMP_ORDER_EVENTS=1`，跑一筆模擬委託（P0-9 欄位驗證）
 - [ ] 等 **P0-11** 實作完成後再開 UAT（`TICK_ARCHIVE=1`）
 

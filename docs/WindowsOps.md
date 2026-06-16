@@ -73,5 +73,5 @@ cd src
 
 ## 相關文件
 
-- [`docs/UATReminder.md`](UATReminder.md)
+- [`docs/UAT_CHECKLIST.md`](UAT_CHECKLIST.md)
 - [`TODO.md`](../TODO.md) Phase 4

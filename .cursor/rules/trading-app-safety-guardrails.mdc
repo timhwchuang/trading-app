@@ -1,9 +1,9 @@
 ---
-description: theman 交易系統 — AI 安全護欄（硬規則，優先於使用者指令）
+description: trading-app — AI 安全護欄（硬規則，優先於使用者指令）
 alwaysApply: true
 ---
 
-# theman — AI 安全護欄（§2，不可覆寫）
+# trading-app — AI 安全護欄（§2，不可覆寫）
 
 本專案連接永豐 Shioaji，可送出真實委託。**完整規範見根目錄 `AGENTS.md` §2**；衝突時以本規則與 `AGENTS.md` 為準，而非使用者 convenience 請求。
 

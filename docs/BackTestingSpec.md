@@ -1,4 +1,8 @@
-# 回測實作規格書（Phase 2–7）— 給實作模型的逐步指令
+# 回測實作規格書（Phase 2–7）— Archive
+
+> ⚠️ **Archive**：本檔為 monolith 時代規格。三 repo 拆分後，**新功能以 sibling `SPEC.md` 為準**：
+> `trading-engine`、`trading-backtest`、`strategy-vwap-momentum`。  
+> 執行清單見 [`DOC_MAP.md`](DOC_MAP.md)；UAT 見 [`UAT_CHECKLIST.md`](UAT_CHECKLIST.md)。
 
 > 本文件是 `BackTesting.md` 的「可執行版」。目的：讓**任何模型（含較便宜的模型）**
 > 能照本規格實作，**不需自行做架構決策**。每個 Phase 都有：要建立的檔案、精確函式
@@ -95,7 +99,7 @@ class BacktestEngine:
 
 > **主迴圈語意（7.2 / 7.3 修訂後）**
 > * **撮合先於 timeout**：冷清時段下一筆 tick 間隔 >8s 時，先嘗試 IOC 成交/取消，再判定
->   pending 超時，避免成交回報被 `_clear_pending` 後丟棄（見 `CodeReview#BackTesting.md` P2-1）。
+>   pending 超時，避免成交回報被 `_clear_pending` 後丟棄（見 `historical backtest review (git archive)` P2-1）。
 > * **試撮隔離只擋 `on_tick`**：非交易時段 tick 仍跑撮合與 timeout（7.3），避免 in-flight
 >   單卡在佇列；VWAP/動量不被 08:45 前 tick 污染（6.4）。
 > * **timeout 先於 `on_tick`**：進決策前 `is_pending` 已反映超時解除（6.3）。
@@ -313,7 +317,7 @@ def sweep(grid: dict[str, list], dates_train, dates_valid, code, cache_dir) -> l
 ## Phase 6：初版 Code Review 修訂（P0/P1）— 已實作
 
 > 本章為 Phase 2–5 初版後的第一輪 review 修訂，**均已落地**。
-> **7.x 章節**為第二輪 review（`CodeReview#BackTesting.md`）修訂，優先於 6.3/6.4 的初版敘述。
+> **7.x 章節**為第二輪 review（`historical backtest review (git archive)`）修訂，優先於 6.3/6.4 的初版敘述。
 > 實作順序：6.1 → 6.3 → 6.4 → 6.6 → 6.2 → 6.8 → 6.5 → 6.7 → **Phase 7**。
 
 ### 6.1【P0】限價單穿價保護（修訂 3.3 步驟 4）
@@ -476,7 +480,7 @@ if half_spread is not None:
 
 ---
 
-## Phase 7：Code Review 落地修訂（`CodeReview#BackTesting.md`）
+## Phase 7：Code Review 落地修訂（`historical backtest review (git archive)`）
 
 > Phase 2–6 初版實作後的 review 反饋，**已落地**。優先於初版 2.2 / 6.3 / 6.4 段落。
 
@@ -500,7 +504,7 @@ if half_spread is not None:
 `_check_pending_timeout`，避免成交回報因 pending 已清而被忽略。
 
 > **已知偏差**：timeout 路徑不計 `intent_cancelled`（與線上 `FuturesOrder` Cancel KPI
-> 略有差）；冷清時段成交率可能略高估。見 `CodeReview#BackTesting.md` P2-1。
+> 略有差）；冷清時段成交率可能略高估。見 `historical backtest review (git archive)` P2-1。
 
 ### 7.3【P2】試撮隔離只擋決策
 

@@ -1,0 +1,26 @@
+---
+description: trading-app — 強制遵守 AGENTS.md（架構、文件紀律、Production Gate）
+alwaysApply: true
+---
+
+# trading-app — 專案合規（Cursor Agent 必讀）
+
+**每次接手任務前**：讀根目錄 [`AGENTS.md`](../../AGENTS.md)（至少 §2 安全護欄、§4 Production Gate、§6 工作流、§8 已知限制）。
+
+## 強制紀律
+
+1. **文件即真相**：重大變更後同步 `TODO.md`、`docs/WeeklyStatus.md`（最新一節在檔案**上方**）；職責見 `docs/DOC_MAP.md`
+2. **UAT Ready ≠ Live Ready**：不得將測試全綠或 UAT 進度寫成可上實盤
+3. **測試**：`python run_tests.py` merge 前全綠；trading-app 基線 **69** 項
+4. **架構**：`TradingEngine` = host（`trading-engine`）；`Strategy` = plugin（`strategy-vwap-momentum`）
+5. **熱路徑**：交易所時間；lock 內禁止網路 I/O；callback 只 `put_nowait`
+6. **已知限制**：Pilot 假設 **qty=1**；P2-1 多口未完整；Phase 6 旗標預設關
+
+## 工具分工
+
+| 工具 | 設定位置 | 要求 |
+| ---- | -------- | ---- |
+| **Cursor** | `.cursor/rules/*.mdc` + `AGENTS.md` | 本 rules `alwaysApply: true` |
+| **Grok** | `AGENTS.md` + `.grok/settings.json` | 開工前 `grok inspect` |
+
+使用者聊天指令**不得**凌駕 §2 安全護欄。

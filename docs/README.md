@@ -1,32 +1,34 @@
 # 文件索引
 
-> 工程規格以 [`TODO.md`](../TODO.md) 為準；每週進度見 [`WeeklyStatus.md`](WeeklyStatus.md)。
->
-> **AI / Cursor / Grok 請先讀**：[`../AGENTS.md`](../AGENTS.md)（**§2 安全護欄優先**）；Cursor 另見 [`.cursor/rules/`](../.cursor/rules/)；Grok 見 [`.grok/settings.json`](../.grok/settings.json)。
+> **路線圖**：[`TODO.md`](../TODO.md)（未完成項）｜**週報**：[`WeeklyStatus.md`](WeeklyStatus.md)｜**職責分工**：[`DOC_MAP.md`](DOC_MAP.md)  
+> **AI 請先讀**：[`../AGENTS.md`](../AGENTS.md) §2 安全護欄
 
-| 文件                                                       | 用途                                       |
-| ---------------------------------------------------------- | ------------------------------------------ |
-| [`../AGENTS.md`](../AGENTS.md)                             | **AI 主規範**（架構、gate、文件紀律、runbook） |
-| [`Architecture.md`](Architecture.md)                      | 四大類 + Broker 解耦（`BrokerPort`）+ 事件規劃（Phase 8） |
-| [`.cursor/rules/`](../.cursor/rules/)                      | Cursor `alwaysApply` 規則                  |
-| [`.grok/settings.json`](../.grok/settings.json)            | Grok 專案 instructions 摘要                |
-| [`BackTesting.md`](BackTesting.md)                         | 回測哲學、同構性、專案結構、Phase 進度     |
-| [`BackTestingSpec.md`](BackTestingSpec.md)                 | 回測可執行規格（Phase 2-7 驗收）           |
-| [`AuditContract.md`](AuditContract.md)                     | SIGNAL/FILL/DAILY_SUMMARY log 契約         |
-| [`UATReminder.md`](UATReminder.md)                         | UAT 第一天檢查清單                         |
-| [`BeforePilot.md`](BeforePilot.md)                         | UAT → Pilot 觀測項與實操守則               |
-| [`WindowsOps.md`](WindowsOps.md)                           | Windows 部署、告警、排程                   |
-| [`CALLBACK_GUARDRAILS.md`](CALLBACK_GUARDRAILS.md)         | Shioaji callback 執行緒守則                |
-| [`CodeReview#1`～`#3`](.)                                  | 歷史 code review（含重構前 `man.py` 行號） |
-| [`CodeReview#BackTesting.md`](CodeReview%23BackTesting.md) | 回測專項 review（歷史）                    |
+| 文件 | 用途 |
+| ---- | ---- |
+| [`../AGENTS.md`](../AGENTS.md) | AI 主規範（架構、gate、runbook） |
+| [`DOC_MAP.md`](DOC_MAP.md) | **文件職責地圖**（避免 TODO / UAT / checklist 重疊） |
+| [`UAT_CHECKLIST.md`](UAT_CHECKLIST.md) | **App 層 UAT**（Windows 部署、落盤、報表） |
+| [`Architecture.md`](Architecture.md) | 四 repo 邊界 |
+| [`AuditContract.md`](AuditContract.md) | SIGNAL/FILL/DAILY_SUMMARY log 契約 |
+| [`BeforePilot.md`](BeforePilot.md) | UAT → Pilot gate |
+| [`WindowsOps.md`](WindowsOps.md) | 排程、告警、NSSM |
+| [`CALLBACK_GUARDRAILS.md`](CALLBACK_GUARDRAILS.md) | Shioaji callback 守則 |
+| [`BackTesting.md`](BackTesting.md) | 回測哲學（高層） |
+| [`BackTestingSpec.md`](BackTestingSpec.md) | ⚠️ Monolith 時代規格 archive |
+| [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) | Tag 前檢查 |
+| [`releases/`](releases/) | 版本說明 |
 
-## 現行架構速查（2026-06-16，v0.1.1）
+## Kernel / sibling 文件（勿在 app 重寫）
 
-- **執行宿主**：`trading-engine` → `TradingEngine`
-- **回測**：`trading-backtest`；app 薄層 `src/backtest/engine.py` 注入 `trading_app_engine_ports()`
-- **決策 plugin**：`strategy-vwap-momentum`（預設 `VWAPMomentumStrategy`）
-- **接線**：`src/integrations/engine_wiring.py` → `trading_app_engine_ports()`
-- **趨勢濾網 / 校準**：plugin `trend.py`；`src/reporting/trend_calibration.py`（P6-1-CAL harness）
-- **測試**：`python run_tests.py`（trading-app **69** 項）；siblings 各自 `run_tests.py`；mock 宿主 `tests/test_helpers.make_host()`
-- **CI**：`.github/workflows/ci.yml`（ubuntu + `run_tests.py` + git-tagged siblings）
-- **發布**：[`releases/v0.1.1.md`](releases/v0.1.1.md)
+| Repo | UAT / 安全 |
+| ---- | ---------- |
+| [trading-engine UAT_CHECKLIST](https://github.com/timhwchuang/trading-engine/blob/main/docs/UAT_CHECKLIST.md) | 狀態機、重連、pending、flatten |
+| [trading-engine LIVE_SAFETY](https://github.com/timhwchuang/trading-engine/blob/main/docs/LIVE_SAFETY.md) | 實盤護欄 |
+
+## 現行架構速查（v0.1.1）
+
+- **Host**：`trading-engine` → `TradingEngine`
+- **Backtest**：`trading-backtest`；app `src/backtest/engine.py` 注入 ports
+- **Strategy**：`strategy-vwap-momentum`
+- **Wiring**：`trading_app_engine_ports()`
+- **測試**：trading-app **69** 項；siblings 各自 `run_tests.py`

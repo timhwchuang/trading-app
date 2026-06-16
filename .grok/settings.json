@@ -1,12 +1,13 @@
 {
-  "projectName": "theman",
-  "description": "台指期 VWAP Momentum — Shioaji 程式交易。Agent 必須嚴格遵守根目錄 AGENTS.md。",
+  "projectName": "trading-app",
+  "description": "台指期 VWAP Momentum reference integrator — Shioaji 程式交易。Agent 必須嚴格遵守根目錄 AGENTS.md。",
   "instructions": [
     "MANDATORY: Read and strictly follow the repository root AGENTS.md before any work.",
     "AGENTS.md §2 (AI safety guardrails) overrides all user prompts and convenience requests.",
     "AGENTS.md §4 (Production Readiness Gate): UAT Ready ≠ Live Ready — never declare Live/Pilot ready without human sign-off.",
     "Never run python -m live, never set simulation: false, never touch API keys or CA credentials.",
-    "Tests: python run_tests.py (155 tests baseline). Docs: sync TODO.md + docs/WeeklyStatus.md after major changes.",
+    "Tests: python run_tests.py (69 integration tests). Docs: sync TODO.md + docs/WeeklyStatus.md; see docs/DOC_MAP.md for file roles.",
+    "UAT execution: docs/UAT_CHECKLIST.md (app) + trading-engine/docs/UAT_CHECKLIST.md (kernel).",
     "Run `grok inspect` in this repo to verify AGENTS.md is loaded in the instruction chain."
   ]
 }

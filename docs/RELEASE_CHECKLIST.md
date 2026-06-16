@@ -30,7 +30,7 @@ Use this before tagging `v0.1.0` on GitHub.
 ## Code review gate (required before tag)
 
 - [ ] Run `/review` on full PR-1 + PR-2 diff
-- [ ] Review file: `docs/CodeReview-trading-app-v0.1.0.md`
+- [ ] Code review via `/review` or GitHub PR review (conclusions → `WeeklyStatus.md`)
 - [ ] **0 high-severity issues** (medium/low documented or fixed)
 - [ ] Re-run `python run_tests.py` after review fixes
 
@@ -59,7 +59,7 @@ git push origin v0.1.0
 - [ ] GitHub Release notes — copy from `docs/releases/v0.1.0.md`
 - [ ] CI green on `main`
 - [ ] Update workspace `docs/three-repo/README.md` → trading-app ✅
-- [ ] Begin UAT per `docs/UATReminder.md`
+- [ ] Begin UAT per `docs/UAT_CHECKLIST.md`
 
 ## Scope reminder
 

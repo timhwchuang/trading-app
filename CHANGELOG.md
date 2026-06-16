@@ -4,6 +4,14 @@ All notable changes to `trading-app` are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).  
 Versioning follows [SemVer](https://semver.org/) (0.x = API may still evolve).
 
+## [Unreleased]
+
+### Changed
+
+- **Docs restructure**: slim `TODO.md` (roadmap only); `UATReminder.md` → `docs/UAT_CHECKLIST.md`; add `docs/DOC_MAP.md`
+- Remove archived CodeReview / Phase8 spec files (history on GitHub)
+- Rename `.cursor/rules` → `trading-app-*.mdc`; remove `start-theman.ps1`
+
 ## [0.1.1] - 2026-06-16
 
 ### Changed
@@ -42,7 +50,7 @@ First public release as **reference integrator app** (renamed from internal `the
 
 ### Notes
 
-- **UAT-ready**, not Live-ready — see `docs/UATReminder.md`
+- **UAT-ready**, not Live-ready — see `docs/UAT_CHECKLIST.md`
 - Pin siblings: `trading-engine@v0.2.0`, `trading-backtest@v0.1.0`, `strategy-vwap-momentum@v0.1.0`
 
 [0.1.0]: https://github.com/timhwchuang/trading-app/releases/tag/v0.1.0
