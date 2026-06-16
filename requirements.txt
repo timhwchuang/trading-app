@@ -1,3 +1,5 @@
--e ./trading-engine
+-e ../trading-engine
+-e ../strategy-vwap-momentum
+-e ../trading-backtest
 shioaji
 PyYAML>=6.0

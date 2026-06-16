@@ -22,7 +22,7 @@ class TestBacktestEngine(unittest.TestCase):
             ReplayTick(datetime.datetime(2026, 6, 12, 9, 0, 1), "18001", 1, 0),
         ]
         engine = BacktestEngine("TXFR1", [datetime.date(2026, 6, 12)])
-        with patch("backtest.replay.iter_replay_ticks", return_value=iter(ticks)):
+        with patch("trading_backtest.loader.iter_replay_ticks", return_value=iter(ticks)):
             engine.run()
         self.assertEqual(
             engine.clock(), ticks[-1].datetime.timestamp()
@@ -51,7 +51,7 @@ class TestBacktestEngine(unittest.TestCase):
             engine.host.pending_intent = "entry"
             yield tick2
 
-        with patch("backtest.replay.iter_replay_ticks", fake_replay):
+        with patch("trading_backtest.loader.iter_replay_ticks", fake_replay):
             engine.run()
 
         self.assertGreater(t1.timestamp() - t0.timestamp(), PENDING_TIMEOUT_SEC)
@@ -73,7 +73,7 @@ class TestBacktestEngine(unittest.TestCase):
             return original_on_tick(tick)
 
         engine.host.on_tick = track
-        with patch("backtest.replay.iter_replay_ticks", return_value=iter(ticks)):
+        with patch("trading_backtest.loader.iter_replay_ticks", return_value=iter(ticks)):
             engine.run()
         self.assertEqual(len(seen), 1)
         self.assertEqual(seen[0].time(), datetime.time(8, 46))
@@ -113,7 +113,7 @@ class TestBacktestEngine(unittest.TestCase):
         def fake_replay(_code, _dates, cache_dir=None):
             yield premarket_tick
 
-        with patch("backtest.replay.iter_replay_ticks", fake_replay):
+        with patch("trading_backtest.loader.iter_replay_ticks", fake_replay):
             engine.run()
 
         deals = [e for e in events if e[0] == FUTURES_DEAL]

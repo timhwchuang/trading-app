@@ -39,7 +39,7 @@ class TestParamSweep(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as tmp:
             cache_dir = Path(tmp)
-            with patch("backtest.replay.iter_replay_ticks", fake_replay):
+            with patch("trading_backtest.loader.iter_replay_ticks", fake_replay):
                 results = sweep(
                     grid,
                     dates_train=[datetime.date(2026, 6, 12)],
@@ -70,7 +70,7 @@ class TestParamSweep(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as tmp:
             cache_dir = Path(tmp)
-            with patch("backtest.replay.iter_replay_ticks", fake_replay):
+            with patch("trading_backtest.loader.iter_replay_ticks", fake_replay):
                 results = sweep(
                     grid,
                     dates_train=[datetime.date(2026, 6, 12)],
@@ -110,7 +110,7 @@ class TestParamSweep(unittest.TestCase):
             )
             with tempfile.TemporaryDirectory() as tmp:
                 cache_dir = Path(tmp)
-                with patch("backtest.replay.iter_replay_ticks", fake_replay):
+                with patch("trading_backtest.loader.iter_replay_ticks", fake_replay):
                     summaries, _signals = _run_backtest_summaries(
                         "TXFR1",
                         [datetime.date(2026, 6, 12)],
@@ -144,9 +144,10 @@ class TestParamSweep(unittest.TestCase):
             host._api_connected = True
             host.current_vwap = 18000.0
             host.vol_1s = 1
-            host.momentum_active = True
-            host.momentum_dir = "Long"
-            host.momentum_trigger_time = 900
+            strat = host.strategy
+            strat.momentum.active = True
+            strat.momentum.direction = "Long"
+            strat.momentum.trigger_time = 900
             host.current_atr = 30.0
             host.has_position = False
             host.is_pending = False

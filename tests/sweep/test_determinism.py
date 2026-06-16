@@ -93,7 +93,7 @@ class TestDeterminism(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             cache_dir = Path(tmp)
-            with patch("backtest.replay.iter_replay_ticks", fake_replay):
+            with patch("trading_backtest.loader.iter_replay_ticks", fake_replay):
                 hashes = [run_hash("TXFR1", [date], cache_dir=cache_dir) for _ in range(3)]
         self.assertEqual(hashes[0], hashes[1])
         self.assertEqual(hashes[1], hashes[2])
@@ -108,7 +108,7 @@ class TestDeterminism(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             cache_dir = Path(tmp)
-            with patch("backtest.replay.iter_replay_ticks", fake_replay):
+            with patch("trading_backtest.loader.iter_replay_ticks", fake_replay):
                 with patch.object(
                     TradingEngine,
                     "process_strategy",
@@ -145,7 +145,7 @@ class TestDeterminism(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             cache_dir = Path(tmp)
-            with patch("backtest.replay.iter_replay_ticks", fake_replay):
+            with patch("trading_backtest.loader.iter_replay_ticks", fake_replay):
                 base_hash = run_hash("TXFR1", [date], cache_dir=cache_dir)
                 with patch.object(
                     TradingEngine, "_emit_daily_summary", emit_with_bonus
@@ -202,7 +202,7 @@ class TestDeterminism(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             cache_dir = Path(tmp)
             _seed_kbars_cache(cache_dir)
-            with patch("backtest.replay.iter_replay_ticks", fake_replay):
+            with patch("trading_backtest.loader.iter_replay_ticks", fake_replay):
                 with patch.object(
                     TradingEngine,
                     "process_strategy",
@@ -239,7 +239,7 @@ class TestDeterminism(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             cache_dir = Path(tmp)
             _seed_kbars_cache(cache_dir)
-            with patch("backtest.replay.iter_replay_ticks", fake_replay):
+            with patch("trading_backtest.loader.iter_replay_ticks", fake_replay):
                 with patch.object(
                     TradingEngine,
                     "process_strategy",

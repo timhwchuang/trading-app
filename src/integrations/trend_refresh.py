@@ -1,4 +1,4 @@
-"""TrendRefreshPort adapter wrapping strategy.trend (theman-specific)."""
+"""TrendRefreshPort adapter wrapping strategy_vwap_momentum.trend."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import datetime
 from typing import Optional
 
 from core.runtime_config import RuntimeConfig
-from strategy.trend import compute_trend
+from strategy_vwap_momentum.trend import compute_trend
 from trading_engine.calendar.port import TaifexMarketCalendar
 
 

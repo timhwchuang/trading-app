@@ -25,12 +25,14 @@
 - 僅供**型別與文件**用途，不在 runtime 強制；`MockBroker`、`MagicMock` 仍以 duck typing 通過。
 - `runtime/engine.py`、`runtime/session.py` 已**移除模組頂層 `import shioaji`**：型別走 `TYPE_CHECKING`、建構與 live-only 路徑走 lazy import。Engine 讀起來即「broker-agnostic」。
 
-### 已落地（Phase 8 全量 extraction）
+### 已落地（Phase 8 + 三 repo 拆分）
 
-- ✅ **下單建構**：`trading_engine.adapters.shioaji.ShioajiOrderAdapter`（唯一 `import shioaji` 建 `FuturesOrder`）；回測/mock 用 `MockOrderAdapter`（字串 action，無 shioaji）。
-- ✅ **訂單事件**：`core/order_events.py` 字串常數（`FUTURES_DEAL` / `FUTURES_ORDER`）。
-- ✅ **版控**：`theman/trading-engine/` vendored sibling package；`requirements.txt` 宣告 `-e ./trading-engine`；CI 同路徑安裝後跑測試。
-- ✅ **接線**：`integrations/engine_wiring.py` → `theman_engine_ports(api=..., use_mock_adapter=...)` 顯式注入 `order_adapter`、`DailyObservability`、`LOG_FILE`/`LOG_LEVEL`。
+- ✅ **TradingEngine**：獨立 repo `../trading-engine`（`pip install -e ../trading-engine`）；theman `src/runtime/` 為 re-export 薄層。
+- ✅ **Strategy Protocol v1**：`trading_engine.core.strategy` 僅 `evaluate` + `reset` + optional helpers；momentum 狀態在 `strategy-vwap-momentum` plugin。
+- ✅ **Strategy plugin**：`../strategy-vwap-momentum`（entry point `vwap_momentum`）；theman `src/strategy/` 為 re-export。
+- ✅ **Backtest**：`../trading-backtest` 含 replay loop + MockBroker；theman `BacktestEngine` 薄 wrapper 注入 `theman_engine_ports`。
+- ✅ **接線**：`integrations/engine_wiring.py` → `theman_engine_ports()` + `load_named_strategy()`；live/backtest 顯式 adapter。
+- 🔜 **CI remote**：GitHub 僅 checkout theman 時需 submodule 或發布 PyPI；本地 monorepo 用 `scripts/ci-setup.sh`。
 
 ### 刻意保留（下一輪窄縫）
 

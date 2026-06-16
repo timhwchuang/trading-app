@@ -11,11 +11,11 @@ from integrations.archive_port import ThemanArchivePort
 from integrations.telemetry_port import ThemanTelemetryPort
 from integrations.trend_refresh import ThemanTrendRefresh
 from observability import DailyObservability
-from strategy.params import StrategyParams
-from strategy.vwap_momentum import VWAPMomentumStrategy
+from strategy_vwap_momentum import StrategyParams, VWAPMomentumStrategy
 from trading_engine.adapters.mock import MockOrderAdapter
 from trading_engine.adapters.shioaji import ShioajiOrderAdapter
 from trading_engine.logging_setup import setup_async_logging
+from trading_engine.plugins import load_strategy
 
 _logging_configured = False
 
@@ -39,6 +39,21 @@ def default_strategy(
     obs: DailyObservability,
 ) -> VWAPMomentumStrategy:
     return VWAPMomentumStrategy(
+        params=StrategyParams.from_runtime_config(cfg),
+        obs=obs,
+    )
+
+
+def load_named_strategy(
+    name: str,
+    cfg: RuntimeConfig,
+    obs: DailyObservability,
+) -> Any:
+    """Load strategy via entry point; falls back to explicit default for vwap_momentum."""
+    if name == "vwap_momentum":
+        return default_strategy(cfg, obs)
+    return load_strategy(
+        name,
         params=StrategyParams.from_runtime_config(cfg),
         obs=obs,
     )
@@ -72,6 +87,7 @@ def theman_engine_ports(
 
 __all__ = [
     "default_strategy",
+    "load_named_strategy",
     "order_adapter_for",
     "theman_engine_ports",
 ]

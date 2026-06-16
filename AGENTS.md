@@ -162,21 +162,17 @@ theman/
   - 負責：on_tick 流程、lock 保護、pending 狀態機、ATR 刷新、session 管理、對帳、落盤、告警。
   - **建構子可注入** `api: BrokerPort`、`clock`（回測用虛擬時鐘）、`strategy: Strategy`（Phase 7）。
   - `host = TradingEngine(api=..., clock=..., strategy=...)`
-  - **Phase 8 引擎抽離**：核心已搬至 vendored `trading-engine/`（`pip install -e ./trading-engine`）；`src/runtime/` 為 re-export 薄層。`engine.py` / `session.py` 無模組頂層 `import shioaji`；下單建構在 `trading_engine.adapters.shioaji.ShioajiOrderAdapter`（唯一 `import shioaji` 建單）；mock 回測用 `MockOrderAdapter`。訂單事件字串常數在 `core/order_events.py`。`integrations/engine_wiring.py` 的 `theman_engine_ports()` 負責 logging / obs / adapter 顯式接線。詳見 [`docs/Architecture.md`](docs/Architecture.md)。
+  - **Phase 8 引擎抽離 + 三 repo**：核心在 sibling packages（`pip install -e ../trading-engine`、`../trading-backtest`、`../strategy-vwap-momentum`）；`src/runtime/` 為 re-export 薄層。`BacktestEngine`（theman）委派 `trading_backtest.BacktestEngine` 並注入 `theman_engine_ports`。Strategy 契約在 `trading_engine.core.strategy`（v1）；VWAP 實作在 plugin。詳見 [`docs/Architecture.md`](docs/Architecture.md) 與 [`../docs/three-repo/README.md`](../docs/three-repo/README.md)。
 
 - **BacktestEngine** (`src/backtest/engine.py`)
   - `self.host = TradingEngine(...)`（把 MockBroker 當 api 傳入）。
   - 提供 `VirtualClock`、`process_matching_queue`、tick 回放控制。
   - 使用方式：`BacktestEngine(code, dates, strategy=xxx).run()`
 
-- **Strategy Protocol** (`src/strategy/base.py`)
-  - `Strategy`（Protocol）定義 host 真正依賴的介面：
-    - `evaluate(...)` → `(OrderSignal | None, StrategySideEffects)`
-    - `manage_exit(...)`、`reset()`、`activate_momentum()`、`update_momentum_peak()`
-    - `build_entry_audit()`、`build_exit_audit()`、`session_force_flatten_signal()`
-  - `BaseStrategy` 提供預設實作（方便新策略繼承）。
-  - 目前預設：`VWAPMomentumStrategy`（`strategy/vwap_momentum.py` + `trend.py`（前身 phase6.py）擴充）。
-  - **新策略只要實作 Strategy（或繼承 BaseStrategy）** 即可注入，無需動 engine。
+- **Strategy Protocol** (`src/strategy/base.py` → `trading_engine.core.strategy`)
+  - `Strategy`（Protocol v1）：`evaluate(...)`、`reset()`；optional `manage_exit`、`build_*_audit`。
+  - `BaseStrategy` 提供預設 no-op。
+  - 預設 plugin：`strategy-vwap-momentum`（`VWAPMomentumStrategy`）；momentum 狀態在 plugin 內部，不在 Protocol。
 
 - **Reporting**
   - `uat_report.py`：解析 log 中的 SIGNAL_AUDIT / FILL_AUDIT / DAILY_SUMMARY，產生秒停損率、生存指標。

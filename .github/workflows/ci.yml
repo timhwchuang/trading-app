@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
-      - run: pip install -r requirements.txt --quiet
+      - run: bash scripts/ci-setup.sh
       - run: python run_tests.py
         working-directory: .
       # 未來可加：UAT 模擬 key（若有）、determinism 重複跑、coverage gate。

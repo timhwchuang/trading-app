@@ -1,33 +1,37 @@
-"""Pluggable trading strategies.
-
-Decision logic implements ``Strategy`` (see ``base.py``) and is injected into the
-execution host via ``TradingEngine(strategy=...)`` or ``BacktestEngine(strategy=...)``.
-
-Example — minimal plugin (inherits defaults for momentum, exit, audit)::
-
-    from strategy.base import BaseStrategy, StrategySideEffects
-    from runtime.engine import TradingEngine
-    from unittest.mock import MagicMock
-
-    class HoldFlat(BaseStrategy):
-        def evaluate(self, market, position, risk, vol_threshold, **kwargs):
-            return None, StrategySideEffects()
-
-    host = TradingEngine(api=MagicMock(), strategy=HoldFlat())
-    # host.strategy is the injected plugin; host itself is the execution engine.
-
-Inject ``VWAPMomentumStrategy`` at the app layer (``live/__main__.py``,
-``BacktestEngine``, or ``tests.test_helpers.make_host``); ``TradingEngine``
-requires an explicit ``strategy``.
-"""
+"""Re-export strategy plugin surface for theman app code."""
 
 from strategy.base import BaseStrategy, Strategy, StrategySideEffects
-from strategy.indicators import IndicatorState
-from strategy.params import SWEEPABLE_PARAMS, SWEEP_FIELD_TO_CONST, StrategyParams
-from strategy.vwap_momentum import VWAPMomentumStrategy
-from strategy.trend import (
+from strategy_vwap_momentum import (
+    SWEEPABLE_PARAMS,
+    StrategyParams,
+    VWAPMomentumStrategy,
+    apply_strategy_params,
     compute_trend,
     dynamic_trail_points,
     dynamic_vwap_stop_distance,
+    patch_strategy_params,
+    restore_strategy_params,
+    sweepable_value,
     trend_allows_entry,
 )
+from trading_engine.core.runtime_config import SWEEP_FIELD_TO_CONST
+from trading_engine.indicators import IndicatorState
+
+__all__ = [
+    "BaseStrategy",
+    "IndicatorState",
+    "SWEEPABLE_PARAMS",
+    "SWEEP_FIELD_TO_CONST",
+    "Strategy",
+    "StrategyParams",
+    "StrategySideEffects",
+    "VWAPMomentumStrategy",
+    "apply_strategy_params",
+    "compute_trend",
+    "dynamic_trail_points",
+    "dynamic_vwap_stop_distance",
+    "patch_strategy_params",
+    "restore_strategy_params",
+    "sweepable_value",
+    "trend_allows_entry",
+]
