@@ -90,7 +90,7 @@ trading-app/
 │   ├── reporting/           # uat_report、績效指標
 │   └── sweep/               # 參數研究
 ├── scripts/windows/         # start-trading-app.ps1、register-task.ps1
-├── tests/                   # integration tests (~69)
+├── tests/                   # integration tests (79)
 ├── pyproject.toml
 └── requirements.txt
 ```

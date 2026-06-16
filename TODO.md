@@ -17,7 +17,7 @@
 
 > **UAT Ready ≠ Live Ready**。Phase 6 是 Live gate，不是 UAT gate。
 
-**測試基線**：`python run_tests.py` — trading-app **76**；siblings 各自 `run_tests.py`（engine / backtest 27 / strategy 31）。
+**測試基線**：`python run_tests.py` — trading-app **79**；siblings 各自 `run_tests.py`（engine 73 / backtest 27 / strategy 31）。
 
 ---
 

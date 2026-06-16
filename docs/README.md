@@ -37,4 +37,4 @@
 - **Backtest**：`trading-backtest`；app `src/backtest/engine.py` 注入 ports
 - **Strategy**：`strategy-vwap-momentum`
 - **Wiring**：`trading_app_engine_ports()`
-- **測試**：trading-app **69** 項；siblings 各自 `run_tests.py`
+- **測試**：trading-app **79** 項；siblings 各自 `run_tests.py`

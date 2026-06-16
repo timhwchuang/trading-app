@@ -65,7 +65,7 @@ trading-app/                 # reference integrator（v0.1.1）
 │   ├── reporting/           # uat_report、績效指標
 │   ├── sweep/               # param_sweep、determinism_check
 │   └── config.py 等         # app 設定、觀測
-├── tests/                   # `python run_tests.py`（69 項整合測試）
+├── tests/                   # `python run_tests.py`（79 項整合測試）
 └── tick_cache/              # UAT / 回測 tick CSV 快取
 
 # Sibling packages（pip install -e ../ 或 requirements.txt git pin）

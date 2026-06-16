@@ -9,7 +9,7 @@ from core.runtime_config import RuntimeConfig, default_runtime_config
 from integrations.engine_wiring import default_strategy, trading_app_engine_ports
 from trading_backtest import BacktestEngine as CoreBacktestEngine
 from trading_backtest import VirtualClock
-from trading_backtest.loader import DEFAULT_CACHE_DIR
+from storage.tick_loader import DEFAULT_CACHE_DIR
 from trading_backtest.mock_broker import MockBroker
 from trading_engine.core.strategy import Strategy
 

@@ -52,6 +52,7 @@
 ## 時序與相容性原則
 
 - 任何新縫以**可選參數 + 安全預設**加入；`make_host` 簽名維持相容。
-- `python run_tests.py` 每次須全綠（trading-app 基線 **69**；siblings 各自維護）；回測 SIGNAL_AUDIT / FILL_AUDIT / DAILY_SUMMARY 與最終 host 狀態須與重構前一致。
+- `python run_tests.py` 每次須全綠（trading-app 基線 **79**；siblings 各自維護）；回測 SIGNAL_AUDIT / FILL_AUDIT / DAILY_SUMMARY 與最終 host 狀態須與重構前一致。
+- **tick_cache 路徑**：app 層一律用 `storage.cache_paths.DEFAULT_TICK_CACHE_DIR`（repo 根 `tick_cache/`），勿用 `trading_backtest.loader` 的 cwd 預設。
 - live 入口（`python -m live`）行為不變。
 - package 搬移（`src/trading_engine/`）延後到出現第二個 app/strategy 才動；先以 `__init__` re-export 取得多數好處。

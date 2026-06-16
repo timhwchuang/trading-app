@@ -93,7 +93,7 @@ When grid contains `trend_*` keys, attach `veto_metrics` from harness.
 
 ## Definition of done (app integration)
 
-- [x] `python run_tests.py` — 76 tests green
+- [x] `python run_tests.py` — 79 tests green
 - [x] Same inputs → same hash (with fills path)
 - [x] Sweep restores config after grid
 - [x] `uat_report` parses backtest logs

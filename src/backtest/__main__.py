@@ -6,7 +6,7 @@ import argparse
 import datetime
 import logging
 
-from trading_backtest.loader import DEFAULT_CACHE_DIR
+from storage.tick_loader import DEFAULT_CACHE_DIR
 
 # App-wired BacktestEngine (trading-app ports + default strategy)
 from .engine import BacktestEngine
