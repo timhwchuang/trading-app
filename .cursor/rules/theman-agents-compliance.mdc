@@ -11,7 +11,7 @@ alwaysApply: true
 
 1. **文件即真相**：重大變更後同步 `TODO.md`、`docs/WeeklyStatus.md`（最新一節在檔案**上方**）；規格變更同步 `BackTestingSpec.md` 等
 2. **UAT Ready ≠ Live Ready**：不得將測試全綠或 UAT 進度寫成可上實盤
-3. **測試**：`python run_tests.py`（或 `.venv/bin/python run_tests.py`）merge 前全綠；目前基線 **139** 項
+3. **測試**：`python run_tests.py`（或 `.venv/bin/python run_tests.py`）merge 前全綠；目前基線 **155** 項
 4. **架構**：`TradingEngine` = host；`Strategy` = 決策 plugin；`BacktestEngine.host` ≠ `.strategy`
 5. **熱路徑**：交易所時間（`exchange_time.py`）；lock 內禁止網路 I/O；callback 只 `put_nowait`
 6. **已知限制**：Pilot 假設 **qty=1**；P2-1 多口未完整；Phase 6 旗標預設關、須 tick 校準

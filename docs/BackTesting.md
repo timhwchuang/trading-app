@@ -69,7 +69,7 @@ theman/
 │   ├── sweep/               # param_sweep、determinism_check
 │   ├── live/                # `python -m live` 入口
 │   └── observability.py     # FILL_AUDIT / DAILY_SUMMARY
-├── tests/                   # `python run_tests.py`（139 項）
+├── tests/                   # `python run_tests.py`（155 項）
 └── tick_cache/              # UAT / 回測 tick CSV 快取
 ```
 

@@ -29,7 +29,7 @@
   - Lock 內絕對禁止網路 I/O（P2-2 核心守則）。
   - Callback 熱路徑必須非阻塞（P0-7 異步日誌 + P0-11 tick 落盤）。
 
-**當前階段（2026-06-16）**：Phase 7 Strategy Interface 已落地；工程體質達 UAT 標準，**待永豐模擬 API 金鑰**後即可開 UAT。見 `TODO.md` 目前狀態表 + `docs/WeeklyStatus.md`（以最新一節為準，勿信過時分支/merge 狀態）。
+**當前階段（2026-06-16）**：Phase 7 Strategy Interface 已落地；**P6-1-CAL A 類 1～5 已 merge `main`**（B 類待 UAT tick）；工程體質達 UAT 標準，**待永豐模擬 API 金鑰**後即可開 UAT。見 `TODO.md` 目前狀態表 + `docs/WeeklyStatus.md`（以最新一節為準）。
 
 ---
 
@@ -203,7 +203,7 @@ host = make_host(decision=MyStrategy())   # 或直接 TradingEngine(..., strateg
 1. 讀 `TODO.md` 目前狀態表 + 對應 Phase。
 2. 讀 `docs/WeeklyStatus.md` **最上方**最新一節（不是只看長期提醒表）。
 3. 讀 `docs/BackTestingSpec.md`（如果涉及回測/驗收）。
-4. 跑測試確認基線（見 §10；目前 **139** 項）。
+4. 跑測試確認基線（見 §10；目前 **155** 項）。
 
 ### 6.2 實作完畢必須做的事（Definition of Done）
 
@@ -238,9 +238,9 @@ host = make_host(decision=MyStrategy())   # 或直接 TradingEngine(..., strateg
 
 ## 7. 工程品質規範（邁向 production）
 
-目前 repo **尚無 CI**（無 `.github/workflows`）。**但 PR / merge 紀律強制**：任何送 review 或 merge 前的變更，**本地必須 `python run_tests.py` 全綠**（155+ 項）。Agent 必須在 commit 訊息或 PR 描述附「run_tests.py OK（N tests）」證據。建議人類補 `.github/workflows/ci.yml` 骨架（on push/PR 跑 python3 run_tests.py）。
+CI 骨架已落地：[`.github/workflows/ci.yml`](.github/workflows/ci.yml)（push/PR 至 `main` 或 `feat/*`/`fix/*` 跑 `python run_tests.py` on ubuntu + py3.11）。**本地 merge 前仍須全綠**（155 項）。若 GitHub Actions 未啟用，以本地 `run_tests.py` 為準。
 
-P6-1-CAL 實作已示範：每個 feat branch commit 前後皆跑 full tests + CQR review。
+P6-1-CAL 實作已示範：每個 feat branch commit 前後皆跑 full tests + code review。
 
 | 項目 | 現況 / 要求 |
 | ---- | ----------- |
@@ -248,7 +248,7 @@ P6-1-CAL 實作已示範：每個 feat branch commit 前後皆跑 full tests + C
 | **測試鏡射** | `tests/` 子資料夾對應 `src/`；頂層 `src/*.py` 測試放 `tests/` 根目錄 |
 | **依賴** | `requirements.txt`：`shioaji`、`PyYAML>=6.0`；**尚未鎖版**——Live 前建議人類 pin `shioaji` 版本並記錄於 `WeeklyStatus` |
 | **Lint / 型別** | 專案尚未強制 ruff/mypy；新 code 應跟隨周邊風格（`from __future__ import annotations`、現有 import 順序） |
-| **CI（建議）** | PR 觸發：`python run_tests.py`；未來可加 Windows runner 做 smoke |
+| **CI** | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) 骨架已落地；PR/push 跑 `run_tests.py`；Windows runner 可 Pilot 前補 |
 | **覆蓋重點** | 狀態機轉移、partial fill 防禦、exchange time 邊界、Strategy 契約、回測確定性——優先於單純行數覆蓋率 |
 
 **禁止**：為了「看起來 production」而引入大型框架、過度抽象、或與現有 `TradingEngine` 單一狀態機衝突的平行架構。
@@ -355,7 +355,7 @@ python -m storage.compress
 1. 讀完本檔 **§2 安全護欄** + **§4 Production Gate**。
 2. `head -100 TODO.md` + 看「目前狀態」表格。
 3. `head -80 docs/WeeklyStatus.md`（**最新**週次，在檔案上方）。
-4. `python run_tests.py` 或 `.venv/bin/python run_tests.py`（確認 139 項基線）。
+4. `python run_tests.py` 或 `.venv/bin/python run_tests.py`（確認 **155** 項基線）。
 5. 讀 `src/strategy/base.py`（Plugin 契約）。
 6. 讀 `src/runtime/engine.py` 前 150 行 + `src/backtest/engine.py`（host 關係）。
 7. 讀 `docs/BackTestingSpec.md` 的「實作狀態與檔案對照」+ 總驗收清單。

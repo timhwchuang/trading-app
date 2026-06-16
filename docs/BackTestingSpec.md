@@ -16,7 +16,7 @@
 >    * `host._maybe_refresh_atr`（回測改 no-op；ATR 改由引擎同步刷新，見 7.1）
 > 3. 不可引入 `pandas` / `numpy`，只用 Python 標準庫。
 > 4. 不可使用 `time.time()` / `datetime.now()` / `date.today()`。時間一律來自 `tick.datetime`。
-> 5. `python run_tests.py` 必須全綠（目前 **139** 項）。
+> 5. `python run_tests.py` 必須全綠（目前 **155** 項）。
 
 ---
 
@@ -540,7 +540,7 @@ if half_spread is not None:
 
 ## 總驗收清單（Definition of Done）
 
-* [x] 每個 Phase 的 `tests/**/test_*.py` 全部通過；`python run_tests.py` 全綠（**139** 項）。
+* [x] 每個 Phase 的 `tests/**/test_*.py` 全部通過；`python run_tests.py` 全綠（**155** 項）。
 * [x] 回測 log 能直接被 `uat_report.py` 解析，指標語意與實盤一致。
 * [x] 同資料連跑 3 次 SHA-256 一致（含**有 K 線 + 有 FILL** 路徑，7.6）。
 * [x] 決策邏輯在 `src/strategy/`（回測僅注入 `_maybe_refresh_atr` no-op）。
@@ -571,7 +571,7 @@ if half_spread is not None:
   `tests.test_helpers.make_host()` 建立 mock 宿主。
 * **驗收**：自訂 `BaseStrategy` 子類注入後，`host.on_tick(tick)` 不拋 `AttributeError`。
 
-分支：`fix/strategy-interface-honesty` → merge 至 `main`。
+**狀態**：Phase 7 已 merge 至 `main`（2026-06-16 前後）。P6-1 Level 2 + CAL A-class 見下方 SOP。
 
 ---
 
@@ -595,9 +595,11 @@ if half_spread is not None:
 
 3. **Sweep（含趨勢參數，P6-1-CAL-3）**  
    - `sweep( grid_with_trend_min_strength + on/off , dates_train, dates_valid, ...)`。  
-   - 報表每列自動附加 `veto_metrics`（當 params 含 trend_* 時呼叫 harness）。  
-   - 排序仍用 valid survival KPI（net expectancy + MDD _penalty）；veto_rate / delta 作為**額外決策輔助欄位**（非排序主鍵）。  
-   - 目標：產生 `trend_min_strength` 敏感度表（0.0 / 0.3 / 0.5 / 0.8 / 1.0 / 1.5 ATR），觀察 delta 穩定度 + veto_rate 合理區間（典型 5-25% 視市況）。
+   - Grid 支援 snake_case（`trend_filter_enabled`）或 `TREND_*`；`apply_strategy_params` 正規化至 config 模組常數。  
+   - `_run_backtest_summaries` 擷取 `SIGNAL_AUDIT`；當 params 含 trend 時附加 `veto_metrics`（`reason=trend_veto` vs allowed entry → harness）。  
+   - **A 類**：`veto_rate` 可來自 backtest capture；`delta_expectancy` 須 B 類 `get_forward_pnl`（tick replay）才有決策價值。  
+   - 排序仍用 valid survival KPI（net expectancy + MDD penalty）；veto 指標為決策輔助欄位。  
+   - 目標：產生 `trend_min_strength` 敏感度表（0.0 / 0.3 / 0.5 / 0.8 / 1.0 / 1.5 ATR）。
 
 4. **人類 Go/No-Go（§4.2 Pilot gate，P6-1-CAL-8）**  
    - **Go**：delta_expectancy 在多日/多參數下穩定為正 + veto_rate 合理（不極端 0 或 100%） + 對整體 net expectancy 有正面或中性貢獻 → 提出校準過的 `trend_min_strength`（非零）供人類核可後才開 `trend_filter_enabled`。  
@@ -615,7 +617,7 @@ if half_spread is not None:
 - 不改變任何回測確定性 hash、kbar no-lookahead、或 ATR 熱身規則（CAL-1 切片已另處理）。
 - 與 P6-2/3 ATR 動態成對：趨勢濾網（少做爛單）優先於動態停損（控每筆風險）。
 
-更新日期：2026-06-16（A-class 1-5 程式+測試+文件基建完成；B-class 待永豐模擬 API + tick 累積）。
+更新日期：2026-06-16（A-class 1-5 + `d127f50` follow-up 已 merge `main`；B-class 待永豐模擬 API + tick 累積）。
 
 ---
 

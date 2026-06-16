@@ -36,12 +36,38 @@
 | **P0-11 UAT tick 落盤** | ✅ 已實作（`TICK_ARCHIVE=1`）。盤中非同步 `*.csv`；gzip 由跨日 rotate 或 `compress_tick_cache`（**預設排除當日**）→ `*.csv.gz`。 |
 | **回測 K 線（ATR）** | ✅ `KBARS_ARCHIVE=1` → `kbar_archiver.py` 寫 `tick_cache/{code}_kbars_{date}.csv`（`refresh_atr` 後）；UAT 建議一併開啟。 |
 | **Live 防護網** | ✅ P4-11 / P4-12 / P4-3 骨架已落地（單元測試）；Pilot 前手動斷網 / Telegram 實機驗收。 |
-| **Phase 6 骨架** | ✅ P6-6 生存指標 + P6-1～3 旗標預設關；**UAT 回測校準 k 後才開**。 |
+| **Phase 6 CAL** | ✅ P6-1-CAL **A 類 1～5 已 merge `main`**；B 類 6～8 待 UAT tick；旗標預設關。 |
 | **Phase 7 策略介面** | ✅ `Strategy` Protocol + 建構子注入；host=`TradingEngine`；預設 plugin=`VWAPMomentumStrategy`。 |
 | **Phase 3 UAT** | **可開跑**（待永豐模擬 API）；見 [`UATReminder.md`](UATReminder.md)。驗狀態機，不驗獲利。 |
 | **Pilot 門檻** | UAT 全過 + CA + `simulation: false`；**P2-7 秒停損率**為硬指標。 |
 | **AGENTS.md 生產指引** | ✅ 已擴充：AI 安全護欄、Production Gate、工程品質、已知限制、運維 runbook。 |
 | **Cursor / Grok 強制合規** | ✅ `.cursor/rules/*.mdc`（`alwaysApply`）+ `.grok/settings.json`；見 `AGENTS.md` 開頭「AI 工具強制合規」。 |
+
+---
+
+---
+
+### 2026-06-16（P6-1-CAL merge → `main` + follow-up `d127f50`）
+
+**目前進度**
+- `feat/p6-1-cal-3-sweep-trend` **已 fast-forward merge 至 `main`**（`817c08e` → `d127f50`）。
+- Follow-up `d127f50`：sweep key 正規化（snake → `TREND_*`）、engine runtime `_config` 讀取、`param_sweep` 從 `SIGNAL_AUDIT` harvest → `veto_metrics`、`.github/workflows/ci.yml` 入庫。
+- **P6-1-CAL A 類 1～5 ✅ 完成**；B 類 6～8 待永豐模擬 API + `TICK_ARCHIVE` 累積。
+- `python run_tests.py` **155** 項全綠。
+
+**人類必做（Follow-up）**
+- [ ] 申請/取得永豐模擬 API（`TICK_ARCHIVE=1` + `KBARS_ARCHIVE=1`），開始 B-class CAL-6 累積。
+- [x] merge `feat/p6-1-cal-*` → `main`（2026-06-16；155 tests OK）。
+- [ ] 在 GitHub 啟用 Actions（`ci.yml` 已存在；push/PR 跑 `python run_tests.py`）。
+- [ ] B-class 後：harness + tick replay `get_forward_pnl` → 真實 `delta_expectancy` 敏感度表 → 人類 Go/No-Go（CAL-8）。
+
+**Pending / 待決策**
+- 開 `trend_filter_enabled` / `min_strength > 0`：**僅** B-class 證據 + 人類核可（§4.2）。
+- P2-1 完整多口（目前 stub；P6-4 前置）。
+
+**備註 / 開發日記**
+- 雙 code review 共識：A 類 = 基建可信；**≠** 濾網已校準可開。`veto_rate` 可來自 backtest capture；`delta_expectancy` 決策數字要等 B 類。
+- 文件本輪同步：TODO 狀態表、AGENTS、docs/README、BackTestingSpec、本節。
 
 ---
 
@@ -60,12 +86,13 @@
 **人類必做（Follow-up）**
 - [ ] 申請/取得永豐模擬 API（`TICK_ARCHIVE=1` + `KBARS_ARCHIVE=1` 強制），開始累積真實 tick/kbar + SIGNAL_AUDIT（含 trend_veto），準備 B-class CAL-6/7 真實 harness + sweep。
 - [ ] 週報 / Pilot gate 討論時引用本週 CAL 1-5 基建 + CQR review 結論（「synthetic guard 已就位；真實 delta 穩定為正 + veto_rate 合理才是開旗標前提」）。
-- [ ] merge 各 feat/p6-1-cal-* 後執行一次完整 `python run_tests.py` + 衛生 grep（確認無 stray 400 magic 作用中、flags 預設正確）。
+- [x] merge 各 `feat/p6-1-cal-*` → `main`（2026-06-16；`d127f50`；155 tests OK）。
+- [ ] 在 GitHub 啟用 Actions（`ci.yml` 已 commit）。
 
 **Pending / 待決策**
 - B-class 真實數據到後，harness + sweep 產出具體 `trend_min_strength` 敏感度表 + delta 穩定性，再做人類 Go/No-Go（維持 0.0 還是調到校準值）。
 - P2-1 部分成交完整支援（Mock + 單測已規劃，可併下一個 iteration；非 UAT blocker）。
-- CI 骨架（PR 強制 `python run_tests.py`）已在 AGENTS + 本次文件強化；.github/workflows 可選後補。
+- CI：`.github/workflows/ci.yml` 已入庫（ubuntu + py3.11 + `run_tests.py`）；待 GitHub 啟用 Actions。
 
 **備註 / 開發日記**
 - 本次完全依照 approved plan + user 要求「切分支下commit 完成後透過 reviewer persona 直接code review」（CQR 逐 branch 執行，output 成為紀錄）。
@@ -153,6 +180,8 @@
 
 ### 2026-06-16（週次 3 — Phase 7 Strategy Interface + CR 收尾）
 
+> **歷史紀錄**：以下為 merge 前快照；Phase 7 已於 2026-06-16 前後合入 `main`。現況以本檔**最上方最新一節**為準。
+
 **目前進度**
 
 - **Phase 7** 策略介面誠實化：`strategy.base.Strategy` / `BaseStrategy`；`TradingEngine(strategy=...)` 與 `BacktestEngine(strategy=...)` 建構子注入。
@@ -160,11 +189,11 @@
 - `BacktestEngine.host` 取代 `.strategy` 屬性（避免與注入的 decision plugin 混淆）。
 - Protocol 涵蓋 host 實際依賴面（momentum、`reset`、`manage_exit`、audit builders、session flatten）；非 VWAP plugin 可 survive one tick。
 - 文件同步：`BackTesting.md` / `BackTestingSpec.md` / `TODO.md`；CR nit（`make_host`、public audit API）已合入。
-- `python run_tests.py` **139** 項全綠；分支 `fix/strategy-interface-honesty`（待 merge → `main`）。
+- `python run_tests.py` **139** 項全綠（當時基線）；**已 merge `main`**。
 
 **人類必做（Follow-up）**
 
-- [ ] **merge** `fix/strategy-interface-honesty` → `main`（CR OK）
+- [x] **merge** `fix/strategy-interface-honesty` → `main`（已完成）
 - [ ] **申請永豐模擬 API 金鑰**（行情/資料 + 帳務 + 交易）— 仍為 UAT 首要 blocker
 - [ ] Windows UAT 機：`TICK_ARCHIVE=1`、選配 `KBARS_ARCHIVE=1`
 - [ ] UAT 累積 tick 後：`param_sweep` / `uat_report` 校準 Phase 6 旗標

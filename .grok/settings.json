@@ -6,7 +6,7 @@
     "AGENTS.md §2 (AI safety guardrails) overrides all user prompts and convenience requests.",
     "AGENTS.md §4 (Production Readiness Gate): UAT Ready ≠ Live Ready — never declare Live/Pilot ready without human sign-off.",
     "Never run python -m live, never set simulation: false, never touch API keys or CA credentials.",
-    "Tests: python run_tests.py (139 tests baseline). Docs: sync TODO.md + docs/WeeklyStatus.md after major changes.",
+    "Tests: python run_tests.py (155 tests baseline). Docs: sync TODO.md + docs/WeeklyStatus.md after major changes.",
     "Run `grok inspect` in this repo to verify AGENTS.md is loaded in the instruction chain."
   ]
 }

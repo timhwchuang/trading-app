@@ -25,4 +25,6 @@
 - **回測**：`src/backtest/engine.py` → `BacktestEngine.host`
 - **決策 plugin**：`src/strategy/`（預設 `VWAPMomentumStrategy`）
 - **契約**：`src/strategy/base.py` → `Strategy` / `BaseStrategy`
-- **測試**：`python run_tests.py`（139 項）；mock 宿主 `tests/test_helpers.make_host()`
+- **趨勢濾網 / 校準**：`src/strategy/trend.py`；`src/reporting/trend_calibration.py`（P6-1-CAL harness）
+- **測試**：`python run_tests.py`（**155** 項）；mock 宿主 `tests/test_helpers.make_host()`
+- **CI**：`.github/workflows/ci.yml`（ubuntu + `run_tests.py`）
