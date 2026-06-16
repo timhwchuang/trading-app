@@ -1,10 +1,10 @@
-"""Tests for P6-1～P6-3 strategy_phase6 helpers."""
+"""Tests for P6-1 trend filter (now in trend.py) + P6-2/3 dynamic ATR helpers."""
 
 from __future__ import annotations
 
 import unittest
 
-from strategy.phase6 import (
+from strategy.trend import (
     compute_trend,
     dynamic_atr_based,
     dynamic_trail_points,
@@ -14,11 +14,11 @@ from strategy.phase6 import (
     resample_closes,
     trend_allows_entry,
     trend_from_ema,
-    trend_from_vwap_slope,
+    trend_from_slope,
 )
 
 
-class TestStrategyPhase6(unittest.TestCase):
+class TestTrendHelpers(unittest.TestCase):
     def test_ema(self):
         values = [1.0, 2.0, 3.0, 4.0, 5.0]
         self.assertIsNotNone(ema(values, 3))
@@ -53,14 +53,50 @@ class TestStrategyPhase6(unittest.TestCase):
         self.assertEqual(direction, "Long")
         self.assertGreater(strength, 0)
 
-    def test_compute_trend_vwap_slope_mode(self):
+    def test_compute_trend_slope_mode(self):
         closes = [100.0 + i for i in range(30)]
         direction, _ = compute_trend(
-            closes, mode="vwap_slope", timeframe_min=1, vwap_slope_min=0.1
+            closes, mode="slope", timeframe_min=1, slope_min=0.1
         )
         self.assertEqual(direction, "Long")
-        flat, _ = trend_from_vwap_slope([100.0, 100.1], min_slope=1.0)
+        flat, _ = trend_from_slope([100.0, 100.1], min_slope=1.0)
         self.assertEqual(flat, "Flat")
+
+    def test_compute_trend_min_strength_level2(self):
+        """Level 2: min_strength forces weak signals back to Flat (real filtering power).
+
+        Only when |trend_strength| >= min_strength do we emit a committed Long/Short
+        that can then cause counter-trend blocks in trend_allows_entry.
+        """
+        # Use data known to produce strong signal (same as test_compute_trend_ema_mode)
+        closes = [100.0 + i for i in range(60)]
+        direction, strength = compute_trend(
+            closes, mode="ema", timeframe_min=5, ema_period=10, min_strength=0.0
+        )
+        self.assertEqual(direction, "Long")
+        self.assertGreater(strength, 10)  # from earlier debugging, ~18.8
+
+        # With min_strength that this move exceeds → still Long
+        direction, _ = compute_trend(
+            closes, mode="ema", timeframe_min=5, ema_period=10, min_strength=5.0
+        )
+        self.assertEqual(direction, "Long")
+
+        # Very high threshold → forced Flat (this is the Level 2 protection)
+        direction, _ = compute_trend(
+            closes, mode="ema", timeframe_min=5, ema_period=10, min_strength=50.0
+        )
+        self.assertEqual(direction, "Flat")
+
+        # Slope mode also respects it
+        direction, _ = compute_trend(
+            closes, mode="slope", timeframe_min=1, slope_min=0.0, min_strength=0.5
+        )
+        self.assertEqual(direction, "Long")
+        direction, _ = compute_trend(
+            closes, mode="slope", timeframe_min=1, slope_min=0.0, min_strength=20.0
+        )
+        self.assertEqual(direction, "Flat")
 
     def test_linear_regression_slope(self):
         slope = linear_regression_slope([100.0, 101.0, 102.0, 103.0])

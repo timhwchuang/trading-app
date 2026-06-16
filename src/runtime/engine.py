@@ -35,7 +35,7 @@ from order_errors import (
     should_retry_order,
 )
 from alerts import send_alert
-from strategy.phase6 import compute_trend
+from strategy.trend import compute_trend
 from strategy.indicators import IndicatorState
 from strategy.vwap_momentum import VWAPMomentumStrategy
 from strategy.base import Strategy
@@ -94,9 +94,10 @@ from config import (
     TRAIL_POINTS_FLOOR,
     TREND_EMA_PERIOD,
     TREND_FILTER_ENABLED,
+    TREND_MIN_STRENGTH,
     TREND_MODE,
+    TREND_SLOPE_MIN,
     TREND_TIMEFRAME_MIN,
-    VWAP_SLOPE_MIN,
     VWAP_STOP_ATR_K,
     VWAP_STOP_POINTS,
     VWAP_STOP_POINTS_FLOOR,
@@ -417,7 +418,8 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
                     mode=TREND_MODE,
                     timeframe_min=TREND_TIMEFRAME_MIN,
                     ema_period=TREND_EMA_PERIOD,
-                    vwap_slope_min=VWAP_SLOPE_MIN,
+                    slope_min=TREND_SLOPE_MIN,
+                    min_strength=TREND_MIN_STRENGTH,
                 )
             else:
                 with self.lock:

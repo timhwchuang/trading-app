@@ -23,7 +23,7 @@ from strategy.base import BaseStrategy, Strategy, StrategySideEffects
 from strategy.indicators import IndicatorState
 from strategy.params import SWEEPABLE_PARAMS, SWEEP_FIELD_TO_CONST, StrategyParams
 from strategy.vwap_momentum import VWAPMomentumStrategy
-from strategy.phase6 import (
+from strategy.trend import (
     compute_trend,
     dynamic_trail_points,
     dynamic_vwap_stop_distance,

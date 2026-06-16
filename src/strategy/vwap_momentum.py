@@ -18,7 +18,7 @@ from core.types import (
 from exchange_time import is_at_or_after
 from strategy.base import BaseStrategy
 from strategy.params import StrategyParams
-from strategy.phase6 import (
+from strategy.trend import (
     dynamic_trail_points,
     dynamic_vwap_stop_distance,
     trend_allows_entry,

@@ -141,7 +141,7 @@ theman/
 │   ├── strategy/           # ★ 可插拔決策邏輯（Phase 7 重點）
 │   │   ├── base.py         # Strategy Protocol + BaseStrategy（契約在此）
 │   │   ├── vwap_momentum.py  # 目前預設實作
-│   │   └── phase6.py       # 趨勢濾網、ATR trailing、VWAP 動態停損
+│   │   └── trend.py        # 趨勢濾網（P6-1 Level 2 min_strength）、ATR trailing、VWAP 動態停損（前身 phase6.py）
 │   ├── reporting/          # UAT / 績效報告
 │   ├── storage/            # tick/kbar 非同步落盤（P0-11 核心）
 │   ├── sweep/              # 參數掃描 + 確定性檢查
@@ -174,7 +174,7 @@ theman/
     - `manage_exit(...)`、`reset()`、`activate_momentum()`、`update_momentum_peak()`
     - `build_entry_audit()`、`build_exit_audit()`、`session_force_flatten_signal()`
   - `BaseStrategy` 提供預設實作（方便新策略繼承）。
-  - 目前預設：`VWAPMomentumStrategy`（`strategy/vwap_momentum.py` + `phase6.py` 擴充）。
+  - 目前預設：`VWAPMomentumStrategy`（`strategy/vwap_momentum.py` + `trend.py`（前身 phase6.py）擴充）。
   - **新策略只要實作 Strategy（或繼承 BaseStrategy）** 即可注入，無需動 engine。
 
 - **Reporting**

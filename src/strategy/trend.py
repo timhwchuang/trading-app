@@ -1,0 +1,200 @@
+"""Trend & dynamic risk helpers for P6 (P6-1 trend filter + P6-2/3 ATR dynamic exits).
+
+This module was previously named phase6.py during skeleton phase.
+It now hosts the higher-timeframe trend regime detection used as entry filter.
+
+Trend filter (P6-1 Level 2):
+- compute_trend(..., min_strength=...) returns meaningful "Long"/"Short" only when
+  the detected move on the resampled HTF has sufficient magnitude.
+- "Flat" now also covers "detected direction but strength below threshold".
+- trend_allows_entry uses the (now stronger) trend_dir to block clear counter-trend
+  pullback entries.
+- This gives real practical value: small noisy HTF drifts no longer create false
+  "with-trend" or "counter-trend" signals, while real legs on the day can protect
+  against fading micro-momentum in the wrong direction.
+"""
+
+from __future__ import annotations
+
+from typing import Callable, Sequence
+
+
+def ema(values: Sequence[float], period: int) -> float | None:
+    if period <= 0 or len(values) < period:
+        return None
+    k = 2.0 / (period + 1)
+    ema_val = values[0]
+    for price in values[1:]:
+        ema_val = price * k + ema_val * (1 - k)
+    return ema_val
+
+
+def resample_closes(closes: Sequence[float], timeframe_min: int) -> list[float]:
+    """Naive stride downsample of 1m closes to higher timeframe.
+
+    Picks approximately the last close of each N-minute bucket by striding.
+    Not a true time-bucket resampler (ignores gaps/missing bars). For
+    production HTF signals prefer fetching the actual higher-TF kbars when possible.
+    """
+    if timeframe_min <= 1:
+        return list(closes)
+    out: list[float] = []
+    for i in range(timeframe_min - 1, len(closes), timeframe_min):
+        out.append(closes[i])
+    return out
+
+
+def linear_regression_slope(values: Sequence[float]) -> float:
+    """Least-squares slope over index 0..n-1."""
+    n = len(values)
+    if n < 2:
+        return 0.0
+    x_mean = (n - 1) / 2.0
+    y_mean = sum(values) / n
+    num = sum((i - x_mean) * (values[i] - y_mean) for i in range(n))
+    den = sum((i - x_mean) ** 2 for i in range(n))
+    if den == 0:
+        return 0.0
+    return num / den
+
+
+def trend_from_ema(closes: Sequence[float], period: int) -> tuple[str, float]:
+    """Return (trend_dir, strength) on resampled HTF closes.
+
+    strength = |last - ema| (always non-negative when Long/Short).
+    Caller (compute_trend) may further downgrade to Flat based on min_strength.
+    """
+    if len(closes) < period:
+        return "Flat", 0.0
+    ema_val = ema(closes[-period:], period)
+    if ema_val is None:
+        return "Flat", 0.0
+    last = closes[-1]
+    strength = round(last - ema_val, 2)
+    if last > ema_val:
+        return "Long", strength
+    if last < ema_val:
+        return "Short", abs(strength)
+    return "Flat", 0.0
+
+
+def trend_from_slope(
+    closes: Sequence[float], min_slope: float
+) -> tuple[str, float]:
+    """Linear regression slope on resampled higher-timeframe closes.
+
+    This is *price* slope (no volume, not VWAP). Positive slope = Long bias.
+    strength = |slope| (always non-negative when Long/Short).
+    Caller (compute_trend) may further downgrade to Flat based on min_strength.
+    """
+    if len(closes) < 2:
+        return "Flat", 0.0
+    slope = linear_regression_slope(closes)
+    strength = abs(round(slope, 2))
+    if slope > min_slope:
+        return "Long", strength
+    if slope < -min_slope:
+        return "Short", strength
+    return "Flat", 0.0
+
+
+def compute_trend(
+    closes: Sequence[float],
+    *,
+    mode: str = "ema",
+    timeframe_min: int = 5,
+    ema_period: int = 20,
+    slope_min: float = 0.0,
+    min_strength: float = 0.0,
+) -> tuple[str, float]:
+    """High-timeframe trend / regime from (typically 1-minute) closes.
+
+    mode="ema":   last vs EMA on resampled HTF closes.
+    mode="slope": linreg price slope on resampled HTF closes.
+
+    min_strength (Level 2):
+        If a direction is detected but |strength| < min_strength, force "Flat", 0.0.
+        This makes "Long"/"Short" labels meaningful (only when the HTF move has legs).
+        Strength units:
+          - ema mode: price points of deviation from EMA
+          - slope mode: absolute slope (price change per resampled bar)
+        Default 0.0 preserves old permissive behavior. Typical useful values
+        (after calibration on tick data): 2.0 ~ 8.0 depending on product & TF.
+    """
+    resampled = resample_closes(closes, timeframe_min)
+    if mode == "slope":
+        direction, strength = trend_from_slope(resampled, slope_min)
+    else:
+        direction, strength = trend_from_ema(resampled, ema_period)
+
+    # Level 2: only commit to a trend label when the move is strong enough.
+    # This is what gives the filter real practical filtering power.
+    if direction != "Flat" and strength < min_strength:
+        return "Flat", 0.0
+    return direction, strength
+
+
+def trend_allows_entry(
+    *,
+    enabled: bool,
+    trend_dir: str,
+    momentum_dir: str,
+) -> bool:
+    """Higher-timeframe (P6-1) regime filter for pullback entries.
+
+    With Level 2 min_strength support in compute_trend:
+      - "Long"/"Short" are only emitted when the HTF move exceeded min_strength.
+      - "Flat" now also includes "direction visible but too weak" and pure noise.
+
+    Logic (unchanged for call-site compatibility):
+    - disabled or trend_dir == "Flat" → allow (permissive on unclear regimes)
+    - else only allow if trend_dir matches the micro momentum direction.
+
+    Real trading value:
+      Strong declared counter-trend days will now reliably block fading the
+      micro pullback in the wrong direction. Weak/choppy days remain permissive
+      (consistent with the original micro + VWAP-pullback philosophy) but at
+      least we no longer pretend a 1-point drift on the 5m is a "trend".
+    """
+    if not enabled or trend_dir == "Flat":
+        return True
+    return trend_dir == momentum_dir
+
+
+def dynamic_atr_based(
+    atr: float,
+    *,
+    floor: float,
+    atr_k: float,
+) -> float:
+    if atr <= 0:
+        return floor
+    return max(floor, round(atr * atr_k, 2))
+
+
+def dynamic_trail_points(
+    atr: float,
+    *,
+    floor: float,
+    atr_k: float,
+) -> float:
+    return dynamic_atr_based(atr, floor=floor, atr_k=atr_k)
+
+
+def dynamic_vwap_stop_distance(
+    atr: float,
+    *,
+    floor: float,
+    atr_k: float,
+) -> float:
+    return dynamic_atr_based(atr, floor=floor, atr_k=atr_k)
+
+
+def dynamic_atr_points(
+    atr: float,
+    *,
+    floor: float,
+    atr_k: float,
+) -> float:
+    """Alias kept for callers using the older name."""
+    return dynamic_atr_based(atr, floor=floor, atr_k=atr_k)

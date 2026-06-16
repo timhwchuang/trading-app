@@ -45,7 +45,7 @@
 
 目前純粹靠短期 momentum + pullback，在大趨勢反轉或盤整行情中容易連續止損。
 
-建議加入更高時間框架（例如 5 分或 15 分）的趨勢判斷（EMA、Supertrend、VWAP slope 等）作為 filter。
+建議加入更高時間框架（例如 5 分或 15 分）的趨勢判斷（EMA、Supertrend、price slope / linreg 等）作為 filter。
 
 ---
 
@@ -69,7 +69,7 @@
 
 | 優先級 | 項目 | 說明 |
 | ------ | ---- | ---- |
-| P0 | Trend Filter | 5m EMA 或 VWAP Slope |
+| P0 | Trend Filter | 5m EMA 或 price slope (linreg) |
 | P1 | ATR Trailing | `TRAIL_POINTS → ATR * k` |
 | P1 | ATR VWAP Stop | `VWAP_STOP_POINTS → ATR * k` |
 | P2 | Position Sizing | Risk Based |

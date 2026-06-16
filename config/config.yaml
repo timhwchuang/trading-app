@@ -87,7 +87,10 @@ strategy:
   trend_timeframe_min: 5
   trend_mode: ema
   trend_ema_period: 20
-  vwap_slope_min: 0.0
+  trend_slope_min: 0.0
+  # Level 2: only declare Long/Short when |strength| >= this (price points).
+  # 0.0 = fully permissive (original behavior). Calibrate with UAT tick data.
+  trend_min_strength: 0.0
   atr_trailing_enabled: false
   trail_atr_k: 0.25
   trail_points_floor: 8

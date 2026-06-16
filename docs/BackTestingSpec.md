@@ -558,7 +558,7 @@ if half_spread is not None:
 | 4 | ✅ | `sweep/determinism_check.py`, `tests/sweep/test_determinism.py` |
 | 5 | ✅ | `sweep/param_sweep.py`, `tests/sweep/test_param_sweep.py` |
 | 6 | ✅ | 穿價/timeout/試撮/hash/ATR熱身/bid-ask校準/StrategyParams sweep |
-| 7 | ✅ | `strategy/base.py`, `strategy/vwap_momentum.py`, `tests/strategy/test_strategy_phase6.py` |
+| 7 | ✅ | `strategy/base.py`, `strategy/vwap_momentum.py`, `tests/strategy/test_trend.py` (前身 test_strategy_phase6.py) |
 
 ### Phase 7 — Strategy interface（2026-06-16）
 
@@ -567,7 +567,7 @@ if half_spread is not None:
 * **注入**：`TradingEngine(strategy=...)`、`BacktestEngine(..., strategy=...)`。
 * **命名**：執行宿主 = `TradingEngine` / `BacktestEngine.host`；**勿**使用已移除的
   `VWAPMomentumStrategy = TradingEngine` 別名。
-* **測試**：`tests/strategy/test_strategy_phase6.py`（constructor 注入 + one-tick survive）；
+* **測試**：`tests/strategy/test_trend.py`（原 test_strategy_phase6.py；包含 trend helpers + strategy interface injection）；
   `tests.test_helpers.make_host()` 建立 mock 宿主。
 * **驗收**：自訂 `BaseStrategy` 子類注入後，`host.on_tick(tick)` 不拋 `AttributeError`。
 
