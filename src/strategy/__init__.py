@@ -19,7 +19,7 @@ Example:
 from strategy.base import BaseStrategy, Strategy, StrategySideEffects
 from strategy.indicators import IndicatorState
 from strategy.params import SWEEPABLE_PARAMS, SWEEP_FIELD_TO_CONST, StrategyParams
-from strategy.vwap_momentum import VWAPMomentumLogic
+from strategy.vwap_momentum import VWAPMomentumStrategy
 from strategy.phase6 import (
     compute_trend,
     dynamic_trail_points,

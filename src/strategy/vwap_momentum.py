@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 MOMENTUM_TIMEOUT_SEC = 180
 
 
-class VWAPMomentumLogic(BaseStrategy):
+class VWAPMomentumStrategy(BaseStrategy):
     """Pure strategy decisions; momentum episode state lives here."""
 
     def __init__(

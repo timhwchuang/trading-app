@@ -37,7 +37,7 @@ from order_errors import (
 from alerts import send_alert
 from strategy.phase6 import compute_trend
 from strategy.indicators import IndicatorState
-from strategy.vwap_momentum import VWAPMomentumLogic
+from strategy.vwap_momentum import VWAPMomentumStrategy
 from strategy.base import Strategy
 from core.types import PositionSnapshot, RiskGate
 
@@ -154,7 +154,7 @@ class TradingEngine(OrderExecutorMixin, SessionMixin):
 
         self.indicators = IndicatorState()
         self._obs = DailyObservability()
-        self.strategy: Strategy = strategy or VWAPMomentumLogic(obs=self._obs)
+        self.strategy: Strategy = strategy or VWAPMomentumStrategy(obs=self._obs)
 
         self.lock = threading.Lock()
         self.contract = None
