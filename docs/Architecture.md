@@ -1,4 +1,4 @@
-# 架構：trading-app + 三 sibling repo（2026-06-16）
+# 架構：trading-app + 三 sibling repo（2026-06-17）
 
 > 本文件記錄 **trading-app**（reference integrator）與 `trading-engine` / `trading-backtest` / `strategy-vwap-momentum` 的邊界。
 > 安全與紀律仍以 [`AGENTS.md`](../AGENTS.md) 為準（§2 護欄、§4 Gate）。
@@ -39,6 +39,25 @@
 
 `trading_engine/session.py` 的 `sync_positions` 仍比對 `sj.Action.Buy`（可下一輪與 `order_events` 字串化統一）。
 
+## 資料流（Live / Backtest）
+
+```text
+Live:  Shioaji tick → on_tick [lock] → IndicatorState → Strategy.evaluate(MarketSnapshot)
+                              ↓ lock 外
+       ArchivePort.enqueue → TickArchiver 背景寫 tick_cache/（TICK_ARCHIVE=1）
+
+Backtest: tick_cache/*.csv(.gz) → load_ticks_csv（整日進 RAM）→ iter_replay_ticks → 同一 on_tick 熱路徑
+```
+
+| 問題 | 答案 |
+| ---- | ---- |
+| Live 會不會吃滿記憶體？ | 不會線性成長。指標用**時間窗口** deque（VWAP 5min、動量 1s）；策略只保留 `MomentumState`。 |
+| 策略讀硬碟嗎？ | **否**。`strategy-vwap-momentum` 只吃 engine 組好的 `MarketSnapshot`。 |
+| 日盤 tick 會落盤嗎？ | `TICK_ARCHIVE=1` 時非同步寫入；queue 滿 10k 會 silent drop（見 `tick_archiver.py`）。 |
+| Backtest 記憶體？ | 按日載入整份 CSV 再 yield；非 row streaming。 |
+
+**視窗語意**（`config.yaml`）：VWAP = 5min 滾動 VWMA（非 session 錨定 VWAP）；動量 = 1s；ATR = 20 根 1m K（每 300s 刷新）。P6-1 trend（預設關）有效尺度約 5m×20≈100min，且現用 stride resample，**非**長趨勢 regime。
+
 ## 事件驅動（規劃中，尚未實作）
 
 依使用者決策（2026-06-16）：
@@ -48,6 +67,20 @@
 - 第一步踏腳石採 **append-only NDJSON 事件檔 sink**（零維運、利於 replay/determinism），**在第一段乾淨 UAT 之後**才做。
 - in-proc event bus 若實作，**必須同步、dumb（list-of-callables）、且在 lock 釋放後 emit**——避免破壞回測確定性（threaded fan-out 會破壞單執行緒 replay 的可重現性）。
 - RabbitMQ / Kafka 列為 **someday/maybe**，僅在出現真實分散式 consumer 時評估。
+
+### 外部參考：NautilusTrader（借鏡，不照搬）
+
+[NautilusTrader](https://github.com/nautechsystems/nautilus_trader)（Rust 核心 + Python 策略 + Message Bus + Cache）與本專案目標尺度不同（multi-venue / 機構級），但下列概念已對齊或列為 UAT 後改進：
+
+| 借 | 不借 | 本專案現況 / 下一步 |
+| --- | --- | --- |
+| Research ↔ Live 同語意 | Rust 重寫熱路徑 | ✅ 共用 `on_tick` + `VirtualClock` |
+| 統一 domain model + Adapter | 熱路徑走外部 MQ | ✅ `BrokerPort` / `TickSnapshot` / `OrderSignal` |
+| Event catalog（可 replay 審計） | Redis / 分散式 state | 已有 `SIGNAL_AUDIT` / `FILL_AUDIT` → **NDJSON sink**（UAT 後） |
+| Cache 作為資料面抽象 | 奈秒精度 / 多 venue | `tick_cache` + `kbar_cache` → 可選 **CachePort** 統一讀寫 |
+| Bar 聚合在 cache 層 | 全事件驅動 Actor API | HTF 若要做：在 cache/engine 產 bar，再餵 snapshot；**非**策略自拉 kbars |
+
+**決策紀錄（2026-06-17）**：P6-1 `trend_filter_enabled` 維持 false；日盤 09:45 後短趨勢不需夜盤 tick。見 [`WeeklyStatus.md`](WeeklyStatus.md)。
 
 ## 時序與相容性原則
 
