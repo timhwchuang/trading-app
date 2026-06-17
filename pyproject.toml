@@ -23,7 +23,7 @@ classifiers = [
   "Topic :: Office/Business :: Financial :: Investment",
 ]
 dependencies = [
-  "trading-engine>=0.2.0,<1.0",
+  "trading-engine>=0.2.2,<1.0",
   "trading-backtest>=0.1.0,<1.0",
   "strategy-vwap-momentum>=0.1.0,<1.0",
   "shioaji",

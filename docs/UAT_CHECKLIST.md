@@ -48,6 +48,7 @@ python -m live
 | B1 | 盤中 `tick_cache/{code}_{date}.csv` 持續增長 | ☐ | 欄位與 live tick 一致 |
 | B2 | `DUMP_ORDER_EVENTS=1` 有一筆 `RAW_ORDER_EVT` | ☐ | 確認券商欄位名 |
 | B3 | 收盤後 `python -m storage.compress` → `*.csv.gz` 可重放 | ☐ | 預設排除當日 |
+| B3b | 手動斷網 30–60s → 恢復：暖機期無 entry、有倉斷線有 CRITICAL 告警 | ☐ | P4-13；見 `LIVE_SAFETY.md` |
 | B4 | `python -m reporting C:\logs\trading-app-uat.log` 有輸出 | ☐ | 秒停損率**觀測**，非 gate |
 | B5 | 工作排程器（選配）：`register-task.ps1` 註冊成功 | ☐ | 見 `WindowsOps.md` |
 

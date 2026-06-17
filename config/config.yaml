@@ -172,11 +172,21 @@ performance:
   sweep_score_metric: expectancy_net  # expectancy_net | sharpe_net | pnl_net
   sweep_dd_penalty: 0.0
   sweep_sl_penalty: 50.0
+  # uat_report 累積風險：本金（點數）與可承受累積最大回撤（點數，跨日累進）
+  initial_capital_points: 0.0
+  max_acceptable_mdd_points: 120.0
 
-# P4-11 / P4-12：Live 防護網（不阻擋 UAT；mock 可測）
+# P4-11 / P4-12 / P4-13：Live 防護網（不阻擋 UAT；mock 可測）
 operations:
   exit_order_max_retries: 3
   exit_order_retry_delay_sec: 1.0
   session_watchdog_sec: 30.0
   session_relogin_max_attempts: 5
   session_relogin_backoff_base_sec: 5.0
+  # P4-13：重連暖機（秒，交易所 tick ts）；預設 300 ≈ vwap_window_min×60
+  reconnect_warmup_sec: 300
+  # P4-13：單日斷線次數上限，達標 block_new_entry 至日切
+  max_disconnects_per_day: 3
+  alert_on_disconnect_with_position: true
+  # P0：ATR 超過 refresh×倍數視為 stale，擋新進場
+  atr_stale_multiplier: 2.0

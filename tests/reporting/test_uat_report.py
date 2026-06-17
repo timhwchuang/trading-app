@@ -94,6 +94,39 @@ class TestUatReport(unittest.TestCase):
         )
         self.assertTrue(any("exit_grace" in h for h in hints))
 
+    def test_cumulative_risk_in_report(self):
+        summaries = [
+            {
+                "date": "2026-06-10",
+                "pnl": {"daily_pnl_points": 5.0},
+                "performance": {"total_pnl_net": 5.0},
+            },
+            {
+                "date": "2026-06-11",
+                "pnl": {"daily_pnl_points": -30.0},
+                "performance": {"total_pnl_net": -30.0},
+            },
+        ]
+        lines = [
+            f"16:00:00 [INFO] DAILY_SUMMARY {json.dumps(s, ensure_ascii=False)}"
+            for s in summaries
+        ]
+        from reporting.uat_report import RiskBudgetSettings
+
+        metrics = compute_metrics(
+            lines,
+            risk_budget=RiskBudgetSettings(
+                initial_capital_points=100.0,
+                max_acceptable_mdd_points=20.0,
+            ),
+        )
+        self.assertTrue(metrics["cumulative_risk"]["budget_breached"])
+        report = format_report(metrics)
+        self.assertIn("風險預算（累進 MDD", report)
+        self.assertTrue(
+            any("累積 MDD" in h for h in metrics["tuning_hints"])
+        )
+
     def test_format_report_contains_slippage_and_hints(self):
         lines = [
             '10:01:00 [INFO] FILL_AUDIT {"intent":"entry","direction":"Buy","signal_price":18000,"fill_price":18003,"slippage_pts":3,"limit_price":18003,"slippage_vs_limit_pts":0,"order_id":"o1","ts":100,"hold_sec":0,"pnl_points":0,"exit_reason":"","ioc_slippage_allowed":3}',

@@ -94,12 +94,18 @@ class Settings:
     sweep_score_metric: str
     sweep_dd_penalty: float
     sweep_sl_penalty: float
+    initial_capital_points: float
+    max_acceptable_mdd_points: float
 
     exit_order_max_retries: int
     exit_order_retry_delay_sec: float
     session_watchdog_sec: float
     session_relogin_max_attempts: int
     session_relogin_backoff_base_sec: float
+    atr_stale_multiplier: float
+    reconnect_warmup_sec: int
+    max_disconnects_per_day: int
+    alert_on_disconnect_with_position: bool
 
     config_path: Path
 
@@ -200,6 +206,10 @@ def load_config(path: str | Path | None = None) -> Settings:
         sweep_score_metric=str(performance.get("sweep_score_metric", "expectancy_net")),
         sweep_dd_penalty=float(performance.get("sweep_dd_penalty", 0.0)),
         sweep_sl_penalty=float(performance.get("sweep_sl_penalty", 50.0)),
+        initial_capital_points=float(performance.get("initial_capital_points", 0.0)),
+        max_acceptable_mdd_points=float(
+            performance.get("max_acceptable_mdd_points", 120.0)
+        ),
         exit_order_max_retries=int(operations.get("exit_order_max_retries", 3)),
         exit_order_retry_delay_sec=float(
             operations.get("exit_order_retry_delay_sec", 1.0)
@@ -210,6 +220,12 @@ def load_config(path: str | Path | None = None) -> Settings:
         ),
         session_relogin_backoff_base_sec=float(
             operations.get("session_relogin_backoff_base_sec", 5.0)
+        ),
+        atr_stale_multiplier=float(operations.get("atr_stale_multiplier", 2.0)),
+        reconnect_warmup_sec=int(operations.get("reconnect_warmup_sec", 300)),
+        max_disconnects_per_day=int(operations.get("max_disconnects_per_day", 3)),
+        alert_on_disconnect_with_position=bool(
+            operations.get("alert_on_disconnect_with_position", True)
         ),
         config_path=config_path.resolve(),
     )
@@ -280,6 +296,8 @@ SHARPE_PERIOD = settings.sharpe_period
 SWEEP_SCORE_METRIC = settings.sweep_score_metric
 SWEEP_DD_PENALTY = settings.sweep_dd_penalty
 SWEEP_SL_PENALTY = settings.sweep_sl_penalty
+INITIAL_CAPITAL_POINTS = settings.initial_capital_points
+MAX_ACCEPTABLE_MDD_POINTS = settings.max_acceptable_mdd_points
 EXIT_ORDER_MAX_RETRIES = settings.exit_order_max_retries
 EXIT_ORDER_RETRY_DELAY_SEC = settings.exit_order_retry_delay_sec
 SESSION_WATCHDOG_SEC = settings.session_watchdog_sec

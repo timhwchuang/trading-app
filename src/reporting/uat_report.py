@@ -12,6 +12,7 @@ from observability import FillAudit
 from reporting.performance_metrics import (
     FrictionSettings,
     aggregate_daily_performance,
+    compute_cumulative_risk_progression,
     compute_performance_from_fills,
 )
 from trading_engine.core.audit.signal_audit import SignalAudit
@@ -290,6 +291,28 @@ def compute_quick_sl_metrics(
     return quick_sl_count, quick_sl_rate, examples
 
 
+@dataclass(frozen=True)
+class RiskBudgetSettings:
+    initial_capital_points: float = 0.0
+    max_acceptable_mdd_points: float | None = None
+
+
+def resolve_risk_budget_settings(
+    risk: RiskBudgetSettings | None,
+) -> RiskBudgetSettings:
+    if risk is not None:
+        return risk
+    try:
+        from config import INITIAL_CAPITAL_POINTS, MAX_ACCEPTABLE_MDD_POINTS
+
+        return RiskBudgetSettings(
+            initial_capital_points=INITIAL_CAPITAL_POINTS,
+            max_acceptable_mdd_points=MAX_ACCEPTABLE_MDD_POINTS,
+        )
+    except Exception:
+        return RiskBudgetSettings()
+
+
 def resolve_friction_settings(
     friction: FrictionSettings | None,
 ) -> tuple[FrictionSettings, str]:
@@ -332,12 +355,19 @@ def compute_performance_block(
     daily_summaries: list[dict],
     friction: FrictionSettings,
     sharpe_period: str,
+    *,
+    initial_capital_points: float = 0.0,
 ) -> tuple[dict, dict]:
     fill_dicts = [asdict(f) for f in fills]
     performance = compute_performance_from_fills(
-        fill_dicts, friction, sharpe_period=sharpe_period
+        fill_dicts,
+        friction,
+        sharpe_period=sharpe_period,
+        initial_capital=initial_capital_points,
     )
-    performance_aggregate = aggregate_daily_performance(daily_summaries)
+    performance_aggregate = aggregate_daily_performance(
+        daily_summaries, initial_capital=initial_capital_points
+    )
     if not performance_aggregate.get("trade_count") and performance.get(
         "expectancy", {}
     ).get("trade_count"):
@@ -361,6 +391,7 @@ def compute_metrics(
     *,
     quick_sl_sec: int = 5,
     friction: FrictionSettings | None = None,
+    risk_budget: RiskBudgetSettings | None = None,
 ) -> dict:
     momentum_triggers = count_momentum_triggers(lines)
     audits, fills = parse_log_audits_and_fills(lines)
@@ -399,8 +430,18 @@ def compute_metrics(
         near_miss = daily_summaries[-1].get("near_miss")
 
     friction, sharpe_period = resolve_friction_settings(friction)
+    risk = resolve_risk_budget_settings(risk_budget)
     performance, performance_aggregate = compute_performance_block(
-        fills, daily_summaries, friction, sharpe_period
+        fills,
+        daily_summaries,
+        friction,
+        sharpe_period,
+        initial_capital_points=risk.initial_capital_points,
+    )
+    cumulative_risk = compute_cumulative_risk_progression(
+        daily_summaries,
+        initial_capital=risk.initial_capital_points,
+        max_acceptable_mdd=risk.max_acceptable_mdd_points,
     )
     slip = slippage_stats(fills)
     exp_by_reason = expectancy_by_reason(fills)
@@ -425,6 +466,7 @@ def compute_metrics(
         "daily_summaries": daily_summaries,
         "performance": performance,
         "performance_aggregate": performance_aggregate,
+        "cumulative_risk": cumulative_risk,
         "fill_count": len(fills),
         "quick_stop_loss_examples": quick_sl_examples,
         "tuning_hints": build_tuning_hints(
@@ -436,6 +478,7 @@ def compute_metrics(
             cancel_rate=open_cancel_rate,
             tick_type=tick_type,
             daily_summaries=daily_summaries,
+            cumulative_risk=cumulative_risk,
         ),
     }
 
@@ -450,6 +493,7 @@ def build_tuning_hints(
     cancel_rate: float | None,
     tick_type: dict | None,
     daily_summaries: list[dict],
+    cumulative_risk: dict | None = None,
 ) -> list[str]:
     """Rule-based hints for humans / AI — maps KPIs to candidate params."""
     hints: list[str] = []
@@ -518,6 +562,24 @@ def build_tuning_hints(
         if atr_min is not None and min_atr is not None and atr_min < min_atr:
             hints.append(
                 f"當日 atr_min={atr_min} < min_atr_threshold={min_atr} → 可能整天無交易"
+            )
+
+    if cumulative_risk:
+        budget = cumulative_risk.get("max_acceptable_mdd_points")
+        cum_mdd = cumulative_risk.get("cumulative_max_drawdown_points")
+        used = cumulative_risk.get("budget_used_pct")
+        if (
+            budget is not None
+            and budget > 0
+            and cum_mdd is not None
+            and cumulative_risk.get("budget_breached")
+        ):
+            hints.append(
+                f"累積 MDD {cum_mdd} 點 > 可承受預算 {budget} 點 → 暫停調參/評估是否縮倉或停玩"
+            )
+        elif used is not None and used >= 80.0:
+            hints.append(
+                f"累積 MDD 已用預算 {used:.1f}%（{cum_mdd}/{budget} 點）→ 接近風險上限"
             )
 
     if not hints:
@@ -595,6 +657,46 @@ def format_report(metrics: dict, *, quick_sl_sec: int = 5) -> str:
         lines.append(
             f"  累計 PnL gross={perf.get('total_pnl_gross')} "
             f"net={perf.get('total_pnl_net')}"
+        )
+
+    agg = metrics.get("performance_aggregate", {})
+    cum_risk = metrics.get("cumulative_risk", {})
+    if cum_risk.get("daily_progression") or agg.get("day_count", 0) > 0:
+        lines.append("風險預算（累進 MDD，跨日）:")
+        cap = cum_risk.get("initial_capital_points")
+        budget = cum_risk.get("max_acceptable_mdd_points")
+        lines.append(
+            f"  本金={cap} 點 | 可承受累積 MDD≤{budget} 點"
+        )
+        cum_mdd = cum_risk.get("cumulative_max_drawdown_points")
+        used = cum_risk.get("budget_used_pct")
+        headroom = cum_risk.get("budget_headroom_points")
+        status = "超標" if cum_risk.get("budget_breached") else "OK"
+        used_text = f"{used:.1f}%" if used is not None else "N/A"
+        lines.append(
+            f"  累積淨利={cum_risk.get('cumulative_pnl_net')} 點 | "
+            f"累積 MDD={cum_mdd} 點 | 預算使用率={used_text} | "
+            f"剩餘={headroom} 點 | {status}"
+        )
+        for row in cum_risk.get("daily_progression", []):
+            lines.append(
+                f"  {row.get('date')} | 日淨利={row.get('daily_pnl_net')} | "
+                f"權益={row.get('equity')} | 累積MDD={row.get('cumulative_max_drawdown_points')}"
+            )
+    elif cum_risk.get("max_acceptable_mdd_points") is not None:
+        dd = perf.get("drawdown", {}) if perf else {}
+        cum_mdd = dd.get("max_drawdown_points")
+        budget = cum_risk.get("max_acceptable_mdd_points")
+        breached = (
+            cum_mdd is not None
+            and budget is not None
+            and budget > 0
+            and cum_mdd > budget
+        )
+        lines.append("風險預算（單段 round-trip 累進 MDD）:")
+        lines.append(
+            f"  MDD={cum_mdd} 點 | 預算≤{budget} 點 | "
+            f"{'超標' if breached else 'OK'}"
         )
 
     cancel = metrics.get("intent_cancelled", {})

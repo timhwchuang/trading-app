@@ -47,6 +47,20 @@
 
 - [ ] Live gate 後段；非 UAT blocker
 
+### P4-13 Live 連線護欄（斷線 / 恢復 — Pilot 前）
+
+> **決策（2026-06-17）**：恢復後須等指標窗口重新對齊才允許新進場；單日斷線過多應停玩並排查網路；有倉斷線必須告警。  
+> 見 [`WeeklyStatus.md`](docs/WeeklyStatus.md) 2026-06-17 備註；實作後更新 `trading-engine/docs/LIVE_SAFETY.md` + UAT checklist。
+
+- [x] **P4-13-A 恢復暖機（reconnect warmup）**：`_on_reconnected` / 重訂閱成功後設 `reconnect_warmup_until_ts`（預設 300s），暖機期間 `RiskGate` 擋 **entry**、仍允許 **exit** / force-flatten
+- [x] **P4-13-B 單日斷線上限**：`api_connected=False` 事件計數（預設 **3 次/交易日**），達標 → `block_new_entry=True` 至日切換 + `AlertPort` **CRITICAL**
+- [x] **P4-13-C 有倉斷線告警**：`_mark_disconnected` 時若 `position_qty>0` → `AlertPort` **CRITICAL**
+- [x] **P4-13-D config**：`config.yaml` `operations` + engine `Settings`（`reconnect_warmup_sec`、`max_disconnects_per_day`、`alert_on_disconnect_with_position`、`atr_stale_multiplier`）
+- [x] **P4-13-E 測試**：`trading-engine/tests/runtime/test_atr_stale_and_reconnect_guards.py` + strategy `test_evaluate_pure`
+- [ ] **P4-13-F UAT**：[`UAT_CHECKLIST.md`](docs/UAT_CHECKLIST.md) 增「手動斷網 30–60s → 恢復 → 確認無意外 entry / 有倉有告警 / 三次斷線停玩」
+- owner: `trading-engine`（護欄邏輯）+ `trading-app`（config、AlertPort、UAT 條目）
+- gate: **Pilot 前**必過；UAT Phase C 可先行驗 B/C（現有 reconnect）+ 暖機/上限（實作後）
+
 ### Phase 8 後續（非 UAT blocker）
 
 - [ ] NDJSON 事件 sink（第一段乾淨 UAT 後）

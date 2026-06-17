@@ -298,6 +298,93 @@ def aggregate_daily_performance(
     }
 
 
+def _daily_net_pnl_from_summary(summary: Mapping[str, Any]) -> float:
+    perf = summary.get("performance") or {}
+    if perf.get("total_pnl_net") is not None:
+        return float(perf["total_pnl_net"])
+    return float(summary.get("pnl", {}).get("daily_pnl_points", 0.0))
+
+
+def compute_cumulative_risk_progression(
+    summaries: Sequence[Mapping[str, Any]],
+    *,
+    initial_capital: float = 0.0,
+    max_acceptable_mdd: float | None = None,
+) -> dict[str, Any]:
+    """Day-by-day cumulative equity and running max drawdown (累進 MDD)."""
+    if not summaries:
+        return {
+            "initial_capital_points": round(initial_capital, 4),
+            "max_acceptable_mdd_points": max_acceptable_mdd,
+            "cumulative_pnl_net": 0.0,
+            "ending_equity": round(initial_capital, 4),
+            "cumulative_max_drawdown_points": None,
+            "current_drawdown_points": None,
+            "budget_used_pct": None,
+            "budget_headroom_points": None,
+            "budget_breached": False,
+            "daily_progression": [],
+        }
+
+    ordered = sorted(summaries, key=lambda s: str(s.get("date", "")))
+    peak = round(initial_capital, 4)
+    equity = round(initial_capital, 4)
+    cumulative_pnl = 0.0
+    cumulative_max_dd = 0.0
+    daily_rows: list[dict[str, Any]] = []
+
+    for summary in ordered:
+        day_pnl = round(_daily_net_pnl_from_summary(summary), 4)
+        cumulative_pnl = round(cumulative_pnl + day_pnl, 4)
+        equity = round(initial_capital + cumulative_pnl, 4)
+        if equity > peak:
+            peak = equity
+        current_dd = round(max(0.0, peak - equity), 4)
+        cumulative_max_dd = round(max(cumulative_max_dd, current_dd), 4)
+        row: dict[str, Any] = {
+            "date": summary.get("date"),
+            "daily_pnl_net": day_pnl,
+            "cumulative_pnl_net": cumulative_pnl,
+            "equity": equity,
+            "peak_equity": peak,
+            "current_drawdown_points": current_dd,
+            "cumulative_max_drawdown_points": cumulative_max_dd,
+        }
+        if max_acceptable_mdd is not None and max_acceptable_mdd > 0:
+            row["budget_used_pct"] = round(
+                cumulative_max_dd / max_acceptable_mdd * 100.0, 2
+            )
+        daily_rows.append(row)
+
+    budget_used = None
+    headroom = None
+    breached = False
+    if max_acceptable_mdd is not None and max_acceptable_mdd > 0:
+        budget_used = round(cumulative_max_dd / max_acceptable_mdd * 100.0, 2)
+        headroom = round(max_acceptable_mdd - cumulative_max_dd, 4)
+        breached = cumulative_max_dd > max_acceptable_mdd
+
+    dd_pct = None
+    if peak > 0:
+        dd_pct = round(cumulative_max_dd / peak * 100.0, 4)
+
+    return {
+        "initial_capital_points": round(initial_capital, 4),
+        "max_acceptable_mdd_points": max_acceptable_mdd,
+        "cumulative_pnl_net": cumulative_pnl,
+        "ending_equity": equity,
+        "cumulative_max_drawdown_points": cumulative_max_dd,
+        "cumulative_max_drawdown_pct": dd_pct,
+        "current_drawdown_points": daily_rows[-1]["current_drawdown_points"]
+        if daily_rows
+        else None,
+        "budget_used_pct": budget_used,
+        "budget_headroom_points": headroom,
+        "budget_breached": breached,
+        "daily_progression": daily_rows,
+    }
+
+
 def sweep_score_from_kpi(
     kpi: Mapping[str, Any],
     *,

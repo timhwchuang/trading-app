@@ -142,6 +142,7 @@ class TestParamSweep(unittest.TestCase):
             strat.momentum.direction = "Long"
             strat.momentum.trigger_time = 900
             host.current_atr = 30.0
+            host.indicators.last_atr_refresh = 1000.0
             host.position_qty = 0
             host.is_pending = False
             host.consecutive_loss = 0

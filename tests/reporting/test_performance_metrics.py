@@ -8,6 +8,7 @@ import unittest
 from reporting.performance_metrics import (
     FrictionSettings,
     aggregate_daily_performance,
+    compute_cumulative_risk_progression,
     compute_drawdown,
     compute_expectancy_stats,
     compute_performance_from_fills,
@@ -114,6 +115,38 @@ class TestPerformanceMetrics(unittest.TestCase):
         self.assertEqual(metrics["performance"]["total_pnl_net"], 8.0)
         report = format_report(metrics)
         self.assertIn("生存指標", report)
+
+    def test_cumulative_risk_progression_across_days(self):
+        summaries = [
+            {
+                "date": "2026-06-10",
+                "pnl": {"daily_pnl_points": 10.0},
+                "performance": {"total_pnl_net": 10.0},
+            },
+            {
+                "date": "2026-06-11",
+                "pnl": {"daily_pnl_points": -25.0},
+                "performance": {"total_pnl_net": -25.0},
+            },
+            {
+                "date": "2026-06-12",
+                "pnl": {"daily_pnl_points": 5.0},
+                "performance": {"total_pnl_net": 5.0},
+            },
+        ]
+        risk = compute_cumulative_risk_progression(
+            summaries,
+            initial_capital=100.0,
+            max_acceptable_mdd=20.0,
+        )
+        self.assertEqual(risk["cumulative_pnl_net"], -10.0)
+        self.assertEqual(risk["ending_equity"], 90.0)
+        self.assertEqual(risk["cumulative_max_drawdown_points"], 25.0)
+        self.assertTrue(risk["budget_breached"])
+        self.assertEqual(len(risk["daily_progression"]), 3)
+        self.assertEqual(
+            risk["daily_progression"][1]["cumulative_max_drawdown_points"], 25.0
+        )
 
     def test_sweep_score_expectancy_net(self):
         kpi = {
