@@ -12,11 +12,11 @@
 | [docs/Architecture.md](docs/Architecture.md) | 與三 sibling repo 的架構對照 |
 | [CHANGELOG.md](CHANGELOG.md) | 版本變更 |
 
-**Sibling packages** (pin for v0.1.1):
+**Sibling packages** (pin for v0.1.2):
 
-- [trading-engine](https://github.com/timhwchuang/trading-engine) `@ v0.2.0`
+- [trading-engine](https://github.com/timhwchuang/trading-engine) `@ v0.2.2`
 - [trading-backtest](https://github.com/timhwchuang/trading-backtest) `@ v0.1.1`
-- [strategy-vwap-momentum](https://github.com/timhwchuang/strategy-vwap-momentum) `@ v0.1.1`
+- [strategy-vwap-momentum](https://github.com/timhwchuang/strategy-vwap-momentum) `@ v0.1.2`
 
 ---
 

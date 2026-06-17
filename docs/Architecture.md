@@ -33,7 +33,7 @@
 - ✅ **Strategy plugin**：`strategy-vwap-momentum`（entry point `vwap_momentum`）
 - ✅ **Backtest**：`trading-backtest`；app 的 `backtest/engine.py` 薄 wrapper 注入 `trading_app_engine_ports`
 - ✅ **接線**：`integrations/engine_wiring.py` → `trading_app_engine_ports()` + `load_named_strategy()`
-- ✅ **CI remote**：`requirements.txt` git pin（`trading-engine@v0.2.0`、`trading-backtest@v0.1.1`、`strategy-vwap-momentum@v0.1.1`）；本地 monorepo 用 `scripts/ci-setup.sh` 或 `pip install -e ../`。
+- ✅ **CI remote**：`requirements.txt` git pin（`trading-engine@v0.2.2`、`trading-backtest@v0.1.1`、`strategy-vwap-momentum@v0.1.2`）；本地 monorepo 用 `scripts/ci-setup.sh` 或 `pip install -e ../`。升級 SOP → [`UPGRADE_RUNBOOK.md`](UPGRADE_RUNBOOK.md)。
 
 ### 刻意保留（下一輪窄縫）
 

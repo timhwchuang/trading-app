@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trading-app"
-version = "0.1.1"
+version = "0.1.2"
 description = "Reference integrator app: wires trading-engine, trading-backtest, and strategy plugins for Windows live UAT"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -25,7 +25,7 @@ classifiers = [
 dependencies = [
   "trading-engine>=0.2.2,<1.0",
   "trading-backtest>=0.1.0,<1.0",
-  "strategy-vwap-momentum>=0.1.0,<1.0",
+  "strategy-vwap-momentum>=0.1.2,<1.0",
   "shioaji",
   "PyYAML>=6.0",
 ]

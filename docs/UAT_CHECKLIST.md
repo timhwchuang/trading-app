@@ -10,8 +10,8 @@
 
 | # | 項目 | Pass | 備註 |
 |---|------|:----:|------|
-| A1 | `pip install -r requirements.txt` 成功 | ☐ | pin `v0.2.0` / `v0.1.1` / `v0.1.1` |
-| A2 | `python run_tests.py` 全綠（79 項） | ☐ | |
+| A1 | `pip install -r requirements.txt` 成功 | ☐ | pin `v0.2.2` / `v0.1.1` / `v0.1.2` |
+| A2 | `python run_tests.py` 全綠（81 項） | ☐ | |
 | A3 | `config/config.yaml` → `simulation: true` | ☐ | Agent 不得改 false |
 | A4 | `SJ_API_KEY` / `SJ_SEC_KEY` 已設（模擬帳戶） | ☐ | 不 commit |
 | A5 | 系統時區台北 UTC+8 | ☐ | |
@@ -94,8 +94,8 @@ Log 契約：`docs/AuditContract.md`（`SIGNAL_AUDIT` / `FILL_AUDIT` / `DAILY_SU
 
 | 欄位 | 值 |
 |------|-----|
-| trading-app tag | v0.1.1 |
-| trading-engine tag | v0.2.0 |
+| trading-app tag | v0.1.2 |
+| trading-engine tag | v0.2.2 |
 | UAT 負責人 | |
 | 模擬交易日數 | |
 | 問題紀錄 | |

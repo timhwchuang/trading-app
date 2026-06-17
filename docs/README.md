@@ -18,6 +18,7 @@
 | `python -m reporting.calibration_cli` | P6-1 B 類：log + tick replay harness + `--sweep` |
 | [`BackTestingSpec.md`](BackTestingSpec.md) | 索引 stub → 四 repo 規格 |
 | [`ARCHIVE/`](ARCHIVE/) | 歷史週報、monolith `BackTestingSpec`（非現行真相） |
+| [`UPGRADE_RUNBOOK.md`](UPGRADE_RUNBOOK.md) | **四 repo 升級 SOP**（pin 矩陣、tag 順序） |
 | [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md) | Tag 前檢查 |
 | [`releases/`](releases/) | 版本說明 |
 
@@ -31,10 +32,10 @@
 | [trading-backtest BACKTEST_IMPLEMENTATION](https://github.com/timhwchuang/trading-backtest/blob/main/docs/BACKTEST_IMPLEMENTATION.md) | MockBroker、回放迴圈 |
 | [strategy-vwap-momentum CALIBRATION](https://github.com/timhwchuang/strategy-vwap-momentum/blob/main/docs/CALIBRATION.md) | P6-1 趨勢校準 SOP |
 
-## 現行架構速查（v0.1.1）
+## 現行架構速查（v0.1.2）
 
 - **Host**：`trading-engine` → `TradingEngine`
 - **Backtest**：`trading-backtest`；app `src/backtest/engine.py` 注入 ports
 - **Strategy**：`strategy-vwap-momentum`
 - **Wiring**：`trading_app_engine_ports()`
-- **測試**：trading-app **79** 項；siblings 各自 `run_tests.py`
+- **測試**：trading-app **81** 項；siblings 各自 `run_tests.py`

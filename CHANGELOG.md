@@ -6,11 +6,20 @@ Versioning follows [SemVer](https://semver.org/) (0.x = API may still evolve).
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-06-17
+
+### Added
+
+- P4-13 `operations` config: reconnect warmup, disconnect limits, `atr_stale_multiplier`
+- Cumulative MDD risk budget in `uat_report` / `performance_metrics` (`initial_capital_points`, `max_acceptable_mdd_points`)
+- [`docs/UPGRADE_RUNBOOK.md`](docs/UPGRADE_RUNBOOK.md) — four-repo upgrade SOP
+
 ### Changed
 
-- **Docs restructure**: slim `TODO.md`; `UAT_CHECKLIST.md`; `DOC_MAP.md`; WeeklyStatus archive → `docs/ARCHIVE/`
-- **BackTestingSpec split**: engine `BACKTEST_HOST_CONTRACT`, backtest `BACKTEST_IMPLEMENTATION`, strategy `CALIBRATION`, app `SWEEP_SPEC`
-- Remove CodeReview / Phase8 spec; rename cursor rules; remove `start-theman.ps1`
+- Pin `trading-engine@v0.2.2`, `strategy-vwap-momentum@v0.1.2`
+- Docs sync: README, SPEC, UAT_CHECKLIST, Architecture, WeeklyStatus
+
+[0.1.2]: https://github.com/timhwchuang/trading-app/releases/tag/v0.1.2
 
 ## [0.1.1] - 2026-06-16
 

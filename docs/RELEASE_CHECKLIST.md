@@ -1,6 +1,17 @@
 # Release checklist — trading-app
 
-Use this before tagging a release on GitHub.
+Use this before tagging a release on GitHub.  
+Four-repo coordination: [`UPGRADE_RUNBOOK.md`](UPGRADE_RUNBOOK.md).
+
+## v0.1.2 — completed 2026-06-17
+
+- [x] Sibling tags: `trading-engine@v0.2.2`, `strategy-vwap-momentum@v0.1.2`
+- [x] `python run_tests.py` — 81 OK (app); engine 80 + strategy 33 OK
+- [x] P4-13 config + `UPGRADE_RUNBOOK.md`
+- [x] `requirements.txt` pins `@v0.2.2` / `@v0.1.2`
+- [x] `git push origin main && git push origin v0.1.2`
+
+---
 
 ## v0.1.1 — completed 2026-06-16
 

@@ -13,6 +13,7 @@
 | **docs/LIVE_SAFETY.md** | trading-engine | Pilot 前 | 實盤安全護欄（CA、`simulation: false` gate）。 |
 | **docs/WindowsOps.md** | trading-app | 運維 | 排程、告警、NSSM、收盤維護。 |
 | **docs/BeforePilot.md** | trading-app | 人類決策 | UAT → Pilot 觀測項、秒停損率、對帳紀律。 |
+| **docs/UPGRADE_RUNBOOK.md** | trading-app | 發布者 | **四 repo 升級 SOP**（pin 矩陣、tag 順序、哪些文件要同步）。 |
 | **docs/RELEASE_CHECKLIST.md** | 各 repo | 發布者 | Tag 前機械檢查（測試、版本、密鑰）。 |
 | **SPEC.md** | 各 repo | 整合者 | 套件邊界、公開 API、依賴方向。 |
 | **docs/SWEEP_SPEC.md** | trading-app | 研究 | 確定性 hash、`param_sweep`、`calibration_cli` 編排 |

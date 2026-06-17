@@ -82,14 +82,16 @@ Log lines consumed by `reporting/uat_report.py`:
 Emitters: `trading-engine` (kernel) + `TradingAppTelemetryPort` (app observability).  
 Checklist: [`trading-engine/docs/UAT_CHECKLIST.md`](https://github.com/timhwchuang/trading-engine/blob/main/docs/UAT_CHECKLIST.md) (kernel) + [`docs/UAT_CHECKLIST.md`](docs/UAT_CHECKLIST.md) (app deployment).
 
-## Version pins (v0.1.1)
+## Version pins (v0.1.2)
 
 ```bash
-pip install "trading-engine @ git+https://github.com/timhwchuang/trading-engine.git@v0.2.0"
+pip install "trading-engine @ git+https://github.com/timhwchuang/trading-engine.git@v0.2.2"
 pip install "trading-backtest @ git+https://github.com/timhwchuang/trading-backtest.git@v0.1.1"
-pip install "strategy-vwap-momentum @ git+https://github.com/timhwchuang/strategy-vwap-momentum.git@v0.1.1"
+pip install "strategy-vwap-momentum @ git+https://github.com/timhwchuang/strategy-vwap-momentum.git@v0.1.2"
 ```
+
+Upgrade SOP: [`docs/UPGRADE_RUNBOOK.md`](docs/UPGRADE_RUNBOOK.md).
 
 ## Status
 
-**v0.1.1** — UAT-ready reference deployment. `simulation: true` default in `config/config.yaml`. Live / Pilot requires human Go/No-Go per `TODO.md` + `docs/BeforePilot.md`.
+**v0.1.2** — UAT-ready reference deployment with P0/P4-13 live guards. `simulation: true` default in `config/config.yaml`. Live / Pilot requires human Go/No-Go per `TODO.md` + `docs/BeforePilot.md`.
