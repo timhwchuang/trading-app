@@ -1,3 +1,6 @@
+> **此 repo 已封存（Archived）。** 開發已移至 monorepo [**tfx-trading**](https://github.com/timhwchuang/tfx-trading) → [`apps/trading-app`](https://github.com/timhwchuang/tfx-trading/tree/main/apps/trading-app)。  
+> 歷史 tag / release 仍可使用，**不再更新**。請改 `git clone git@github.com:timhwchuang/tfx-trading.git`。
+
 # trading-app
 
 > **Reference integrator app** for TXF VWAP momentum on Windows — wires `trading-engine`, `trading-backtest`, and `strategy-vwap-momentum` into a runnable deployment with config, storage, reporting, and UAT tooling.
